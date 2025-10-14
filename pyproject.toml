@@ -1,0 +1,14 @@
+[project]
+name = "spectral"
+version = "0.1.0"
+description = "Quant Research Library"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "altair>=5.5.0",
+    "matplotlib>=3.10.7",
+    "pandas>=2.3.3",
+    "polars>=1.34.0",
+    "polygon-api-client>=1.15.4",
+    "pyarrow>=21.0.0",
+]
