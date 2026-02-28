@@ -90,9 +90,6 @@ poetry.lock
 # PEP 582; used by e.g. python-pm
 __pypackages__/
 
-# pyright
-typings/
-
 # VS Code
 .vscode/
 
