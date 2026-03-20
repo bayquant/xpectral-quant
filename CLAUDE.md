@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Spectral is a quantitative research library that extends **Polars** DataFrames with domain-specific functionality via Python's accessor registration pattern.
+Xpectral is a quantitative research library that extends **Polars** DataFrames with domain-specific functionality via Python's accessor registration pattern.
 
 ## Code Style
 

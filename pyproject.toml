@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "spectral"
+name = "xpectral"
 version = "0.1.0"
 description = "Quant Research Library"
 readme = "README.md"
@@ -32,26 +32,17 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-<<<<<<< Updated upstream
-    "black",
-    "ipykernel>=7.0.1",
-    "furo>=2024.0",
-    "myst-parser>=3.0",
-    "sphinx>=8.0",
-    "sphinx-autodoc-typehints>=2.0",
-=======
     "black",                           # code formatter
     "ipykernel>=7.0.1",                # Jupyter notebook support
     "furo>=2024.0",                    # Sphinx theme for docs
     "myst-parser>=3.0",                # Markdown support in Sphinx docs
     "sphinx>=8.0",                     # Sphinx documentation generator
     "sphinx-autodoc-typehints>=2.0",   # type hint rendering in Sphinx docs
->>>>>>> Stashed changes
 ]
 
 [project.urls]
-Homepage = "https://github.com/bayquant/spectral"
+Homepage = "https://github.com/bayquant/xpectral"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["spectral*"]
+include = ["xpectral*"]

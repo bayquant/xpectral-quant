@@ -1,4 +1,4 @@
-"""Script to generate the spectral decomposition banner GIF."""
+"""Script to generate the xpectral decomposition banner GIF."""
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +8,7 @@ from matplotlib.gridspec import GridSpec
 # --- Config ---
 N_FRAMES = 90
 FPS = 18
-OUT_PATH = "assets/spectral_banner.gif"
+OUT_PATH = "assets/xpectral_banner.gif"
 
 BG      = "#FFFFFF"
 BLUE    = "#4285F4"
