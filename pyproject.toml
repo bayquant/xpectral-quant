@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
     { name = "BayQuant" }
 ]
-keywords = ["quant", "finance"]
+keywords = ["finance", "quant", "bokeh", "polars"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",

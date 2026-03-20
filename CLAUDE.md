@@ -27,3 +27,5 @@ The public surface — classes and functions documented, and exported via __all_
 # Private API
 #-----------------------------------------------------------------------------
 Implementation details prefixed with _. Not intended for external use.
+
+## External library context
