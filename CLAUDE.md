@@ -28,4 +28,10 @@ The public surface — classes and functions documented, and exported via __all_
 #-----------------------------------------------------------------------------
 Implementation details prefixed with _. Not intended for external use.
 
+- Use `#` for all comments, including multi-line blocks (PEP 8). Reserve `"""` for docstrings on modules, classes, and functions (PEP 257).
+
+### Naming conventions
+
+- Use `args` and `kwargs` for positional and keyword argument collections. Use `arg` and `kwarg` when iterating over them.
+
 ## External library context
