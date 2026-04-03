@@ -6,7 +6,7 @@ Xpectral is a quantitative research library that extends **Pandas** and **Polars
 
 ## Code Style
 
-All .py files (if sections are empty) should contain the following blocks:
+All .py files (even if sections are empty) should contain the following blocks:
 
 #-----------------------------------------------------------------------------
 # Imports

@@ -1,9 +1,9 @@
 repos:
   - repo: local
     hooks:
-      - id: generate-stubs
-        name: Generate .pyi stubs
-        entry: uv run stubgen -p xpectral -o stubs --quiet
+      - id: black
+        name: Format with black
+        entry: uv run black
         language: system
-        pass_filenames: false
+        types: [python]
         stages: [pre-commit]
