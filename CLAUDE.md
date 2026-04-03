@@ -2,11 +2,11 @@
 
 ## Architecture
 
-Xpectral is a quantitative research library that extends **Polars** DataFrames with domain-specific functionality via Python's accessor registration pattern.
+Xpectral is a quantitative research library that extends **Pandas** and **Polars** DataFrames with domain-specific functionality via Python's accessor registration pattern.
 
 ## Code Style
 
-All .py files should contain the following blocks: 
+All .py files (if sections are empty) should contain the following blocks:
 
 #-----------------------------------------------------------------------------
 # Imports

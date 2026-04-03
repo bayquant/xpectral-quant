@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: generate-stubs
+        name: Generate .pyi stubs
+        entry: uv run stubgen -p xpectral -o stubs --quiet
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

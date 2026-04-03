@@ -33,11 +33,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "black",                           # code formatter
-    "ipykernel>=7.0.1",                # Jupyter notebook support
-    "furo>=2024.0",                    # Sphinx theme for docs
-    "myst-parser>=3.0",                # Markdown support in Sphinx docs
-    "sphinx>=8.0",                     # Sphinx documentation generator
-    "sphinx-autodoc-typehints>=2.0",   # type hint rendering in Sphinx docs
+    "ipykernel>=7.0.1",                # jupyter notebook support
+    "furo>=2024.0",                    # sphinx theme for docs
+    "myst-parser>=3.0",                # markdown support in sphinx docs
+    "mypy",                            # stub generator (stubgen)
+    "pre-commit",                      # git hook manager
+    "sphinx>=8.0",                     # sphinx documentation generator
+    "sphinx-autodoc-typehints>=2.0",   # type hint rendering in sphinx docs
 ]
 
 [project.urls]
