@@ -31,5 +31,15 @@ Annotate sample DataFrames with `PolarsDataFrame` or `PandasDataFrame` when you 
 ## Install
 
 ```bash
+pip install xpectral
+```
+
+```bash
+uv add xpectral
+```
+
+For development:
+
+```bash
 uv sync
 ```
