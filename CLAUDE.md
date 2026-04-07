@@ -6,7 +6,7 @@ Xpectral is a quantitative research library that extends **Pandas** and **Polars
 
 ## Code Style
 
-All .py files (even if sections are empty) should contain the following blocks:
+- All .py files (even if sections are empty) should contain the following blocks:
 
 #-----------------------------------------------------------------------------
 # Imports
@@ -29,6 +29,8 @@ The public surface — classes and functions documented, and exported via __all_
 Implementation details prefixed with _. Not intended for external use.
 
 - Use `#` for all comments, including multi-line blocks (PEP 8). Reserve `"""` for docstrings on modules, classes, and functions (PEP 257).
+
+- TODO: add note on how to write my doctrings.
 
 ### Naming conventions
 
