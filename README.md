@@ -28,6 +28,24 @@ pd_fig.line(x="x", y="y")
 
 Annotate sample DataFrames with `PolarsDataFrame` or `PandasDataFrame` when you want the editor (pyright) to resolve the `df.bokeh(...)` parameters and chained accessor methods. Annotation is neccessary for type. hinting as accessors are not discovered dinamically.
 
+### Custom chart methods
+
+Use `BokehAccessor.register` to add your own methods to the accessor. The decorated function receives `self` — the accessor instance — giving access to `self._df`, `self.source`, `self.plot`, and all built-in glyph methods.
+
+```python
+from xpectral.charts import BokehAccessor
+
+@BokehAccessor.register
+def price_band(self, mid, upper, lower, **kwargs):
+    self.line(y=mid, **kwargs)
+    self.varea(y1=lower, y2=upper, fill_alpha=0.2, **kwargs)
+
+fig = df.bokeh(title="Bands", width=800, height=400)
+fig.price_band(mid="close", upper="upper", lower="lower")
+```
+
+The method is available on both Polars and Pandas accessors immediately after registration.
+
 ## Install
 
 ```bash
