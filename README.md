@@ -12,6 +12,8 @@ A quantitative research library that extends **Polars** and **Pandas** DataFrame
 
 ## `xpectral.charts`
 
+### Usage
+
 ```python
 import xpectral  # registers the accessors
 from xpectral import PandasDataFrame
@@ -26,7 +28,7 @@ pd_fig = pd_df.bokeh(title="Example", width=600, height=400)
 pd_fig.line(x="x", y="y")
 ```
 
-Annotate sample DataFrames with `PolarsDataFrame` or `PandasDataFrame` when you want the editor (pyright) to resolve the `df.bokeh(...)` parameters and chained accessor methods. Annotation is neccessary for type. hinting as accessors are not discovered dinamically.
+Annotate sample DataFrames with `PolarsDataFrame` or `PandasDataFrame` when you want the editor (pyright) to resolve the `df.bokeh(...)` parameters and chained accessor methods. Annotation is neccessary for type hinting as accessors are not discovered dinamically.
 
 ### Custom chart methods
 
