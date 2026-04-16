@@ -16,7 +16,7 @@ Separate imports with comments # Standard library imports and # Other imports. S
 #-----------------------------------------------------------------------------
 # Globals and constants
 #-----------------------------------------------------------------------------
-Module-level __all__ and other constants. Only add constants that are used substantially across the code.
+Module-level __all__ and other constants. Only add constants that are used substantially across the code. Constants with a preceding _ should be in this section.
 
 #-----------------------------------------------------------------------------
 # General API
