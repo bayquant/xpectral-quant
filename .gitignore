@@ -99,6 +99,7 @@ __pypackages__/
 
 # Local virtual environments
 venv/
+.env
 .env/
 env/
 .env.*

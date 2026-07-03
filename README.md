@@ -1,61 +1,53 @@
-# Xpectral
+# Xpectral Quant
 
 ![Spectral decomposition](assets/xpectral_banner.gif)
 
-A quantitative research library that extends **Polars** and **Pandas** DataFrames with charting and quant analytics.
+Quant analytics and market data that extend **Polars** DataFrames via the
+accessor pattern.
+
+Part of the Xpectral project, alongside [`xpectral-chart`](https://github.com/bayquant/xpectral-chart)
+(fluent Bokeh charting). Both install into the shared `xpectral` namespace and
+can be used together.
 
 ## Modules
 
-- **`xpectral.charts`** — Fluent Bokeh visualization via `df.bokeh.line(...)`, `df.bokeh.scatter(...)`, etc.
-- **`xpectral.quant`** — Financial metrics (returns, volatility, beta) via `pl.col(...).quant.returns()`
-- **`xpectral.data`** — Market data from the Polygon/Massive API with caching and rate limiting
+- **`xpectral.quant`** — Financial metrics (returns, volatility, beta) via
+  `pl.col(...).quant.returns()`, plus a `Portfolio` builder.
+- **`xpectral.data`** — Market data from the Polygon/Massive API with caching
+  and rate limiting, plus simulations (`BrownianMotion`).
 
-## `xpectral.charts`
-
-### Usage
-
-```python
-import xpectral  # registers the accessors
-from xpectral import PandasDataFrame
-from xpectral import PolarsDataFrame
-
-df: PolarsDataFrame = pl.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
-fig = df.bokeh(title="Example", width=600, height=400)
-fig.line(x="x", y="y")
-
-pd_df: PandasDataFrame = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
-pd_fig = pd_df.bokeh(title="Example", width=600, height=400)
-pd_fig.line(x="x", y="y")
-```
-
-Annotate sample DataFrames with `PolarsDataFrame` or `PandasDataFrame` when you want the editor (pyright) to resolve the `df.bokeh(...)` parameters and chained accessor methods. Annotation is neccessary for type hinting as accessors are not discovered dinamically.
-
-### Custom chart methods
-
-Use `BokehAccessor.register` to add your own methods to the accessor. The decorated function receives `self` — the accessor instance — giving access to `self._df`, `self.source`, `self.plot`, and all built-in glyph methods.
+## Usage
 
 ```python
-from xpectral.charts import BokehAccessor
+import xpectral.quant  # registers the .quant accessor
+import polars as pl
 
-@BokehAccessor.register
-def price_band(self, mid, upper, lower, **kwargs):
-    self.line(y=mid, **kwargs)
-    self.varea(y1=lower, y2=upper, fill_alpha=0.2, **kwargs)
-
-fig = df.bokeh(title="Bands", width=800, height=400)
-fig.price_band(mid="close", upper="upper", lower="lower")
+df = pl.DataFrame({"close": [100.0, 101.0, 99.5, 102.0]})
+df.with_columns(pl.col("close").quant.returns())
 ```
 
-The method is available on both Polars and Pandas accessors immediately after registration.
+Importing `xpectral.quant` / `xpectral.data` is what registers the accessors and
+loads market-data credentials.
+
+### Market data credentials
+
+`xpectral.data` reads Polygon/Massive API credentials from an `xpectral/.env`
+file (loaded automatically on `import xpectral.data`). Create it with your keys;
+it is git-ignored and never committed.
+
+See each subpackage's README for module-level docs:
+
+- [`xpectral/quant/README.md`](xpectral/quant/README.md)
+- [`xpectral/data/README.md`](xpectral/data/README.md)
 
 ## Install
 
 ```bash
-pip install xpectral
+pip install xpectral-quant
 ```
 
 ```bash
-uv add xpectral
+uv add xpectral-quant
 ```
 
 For development:
