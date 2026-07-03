@@ -30,10 +30,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "black",             # code formatter
-    "ipykernel>=7.0.1",  # jupyter notebook support
-    "pre-commit",        # git hook manager
-    "pytest",            # test runner
+    "black",                          # code formatter
+    "ipykernel>=7.0.1",               # jupyter notebook support
+    "pre-commit",                     # git hook manager
+    "pytest",                         # test runner
+    "furo>=2024.0",                   # sphinx theme for docs
+    "myst-parser>=3.0",               # markdown support in sphinx docs
+    "sphinx>=8.0",                    # sphinx documentation generator
+    "sphinx-autodoc-typehints>=2.0",  # type hint rendering in sphinx docs
 ]
 
 [project.urls]
