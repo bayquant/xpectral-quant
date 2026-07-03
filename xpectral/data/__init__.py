@@ -24,10 +24,12 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 from . import massive
 from . import simulations
+from .massive import Massive
 from .simulations import BrownianMotion
 
 __all__ = [
     "BrownianMotion",
+    "Massive",
     "massive",
     "simulations",
 ]

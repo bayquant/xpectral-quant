@@ -1,97 +1,147 @@
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Imports
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 # Standard library imports
 from datetime import date
 from datetime import datetime
 from functools import lru_cache
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
 import os
 
 # Other imports
 from massive import RESTClient
 from massive.rest.models import Sort
 import polars as pl
+
 from ..utils.rate_limiter import RateLimiter
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Globals and constants
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-client = RESTClient(
-    api_key=os.getenv("MASSIVE_API_KEY", ""), pagination=True, trace=False
-)
-_rate_limiter = RateLimiter(calls=5, per_seconds=60)
+__all__ = ["Massive"]
 
-#-----------------------------------------------------------------------------
+# Map an aggregate timespan onto the polars duration used to truncate its
+# timestamp. Anything coarser than a minute is truncated to the day.
+_FREQ_MAP = {
+    "second": "1s",
+    "minute": "1m",
+}
+
+# -----------------------------------------------------------------------------
 # General API
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-def get_aggregate_bars(
-        tickers: List[str],
+
+class Massive:
+    """Fetch aggregate bars from the Polygon/Massive API into Polars.
+
+    Wraps a single :class:`massive.RESTClient` and returns OHLCV aggregate
+    bars for a set of tickers as a semi-wide ``pl.LazyFrame`` indexed by
+    ``timestamp``/``ticker``.
+
+    Args:
+        api_key: Massive API key. Defaults to the ``MASSIVE_API_KEY``
+            environment variable.
+        rate_limiter: Optional :class:`RateLimiter` applied once per ticker
+            before its request. When omitted, no rate limiting is applied.
+    """
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        rate_limiter: RateLimiter | None = None,
+    ):
+        self._client = RESTClient(
+            api_key=api_key or os.getenv("MASSIVE_API_KEY", ""),
+            pagination=True,
+            trace=False,
+        )
+        self._rate_limiter = rate_limiter
+        # Per-instance, bounded cache of fetched frames keyed by request args.
+        # Binding the wrapper here keeps `self` out of the cache key and avoids
+        # the cross-instance leak of decorating the method at class scope.
+        self._get_aggregate_bars = lru_cache(maxsize=10)(self._get_aggregate_bars)
+
+    def get_aggregate_bars(
+        self,
+        tickers: list[str],
         multiplier: int,
         timespan: str,
-        from_: Union[str, int, datetime, date],
-        to: Union[str, int, datetime, date],
-        adjusted: Optional[bool] = True,
-        sort: Optional[Union[str, Sort]] = None,
-        limit: Optional[int] = None
-        ):
-    # create kwargs dictionary from local variables (copy to avoid mutating locals directly)
-    kwargs = locals().copy()
-    # convert tickers to tuple for caching (lru_cache)
-    kwargs["tickers"] = tuple(kwargs["tickers"])
+        from_: str | int | datetime | date,
+        to: str | int | datetime | date,
+        adjusted: bool = True,
+        sort: str | Sort | None = None,
+        limit: int | None = None,
+    ) -> pl.LazyFrame:
+        """Fetch aggregate bars for ``tickers`` as a semi-wide LazyFrame.
 
-    df = _get_aggregate_bars(**kwargs)
+        Args:
+            tickers: Symbols to fetch.
+            multiplier: Size of the timespan multiplier (e.g. ``5`` minutes).
+            timespan: Aggregate window (``"second"``, ``"minute"``, ``"day"``,
+                ...).
+            from_: Start of the range, inclusive.
+            to: End of the range, inclusive.
+            adjusted: Whether results are adjusted for splits.
+            sort: Sort direction for the returned bars.
+            limit: Maximum number of base aggregates queried per request.
 
-    return df
+        Returns:
+            LazyFrame with ``timestamp``/``ticker`` index columns followed by
+            one column per aggregate metric.
+        """
+        # Normalise tickers to a hashable tuple so the cached fetch can key on it.
+        return self._get_aggregate_bars(
+            tuple(tickers), multiplier, timespan, from_, to, adjusted, sort, limit
+        )
 
-#-----------------------------------------------------------------------------
-# Private API
-#-----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # Private API
+    # -----------------------------------------------------------------------------
 
-@lru_cache(maxsize=10)
-def _get_aggregate_bars(**kwargs):
-    tickers = list(kwargs.pop("tickers"))
+    def _get_aggregate_bars(
+        self,
+        tickers: tuple[str, ...],
+        multiplier: int,
+        timespan: str,
+        from_: str | int | datetime | date,
+        to: str | int | datetime | date,
+        adjusted: bool,
+        sort: str | Sort | None,
+        limit: int | None,
+    ) -> pl.LazyFrame:
+        rows = []
+        for ticker in tickers:
+            if self._rate_limiter is not None:
+                self._rate_limiter.acquire()
+            for agg in self._client.list_aggs(
+                ticker=ticker,
+                multiplier=multiplier,
+                timespan=timespan,
+                from_=from_,
+                to=to,
+                adjusted=adjusted,
+                sort=sort,
+                limit=limit,
+            ):
+                # Each aggregate is already one wide row; tag it with its ticker.
+                rows.append(agg.__dict__ | {"ticker": ticker})
 
-    aggs = []
-    for ticker in tickers:
-        _rate_limiter.acquire()
-        for a in client.list_aggs(ticker=ticker, **kwargs):
-            data = a.__dict__
-            timestamp = data["timestamp"]
-            long_format = [
-                {"timestamp": timestamp, "ticker": ticker, "metric": key, "value": value}
-                for key, value in data.items() if key != "timestamp"
-            ]
-            aggs.extend(long_format)
+        df = pl.DataFrame(rows)
 
-    df = pl.DataFrame(data=aggs)
+        # Transform the unix timestamp to New York local time, truncated to the
+        # aggregate's frequency.
+        df = df.with_columns(
+            pl.col("timestamp")
+            .cast(pl.Datetime("ms"))
+            .dt.replace_time_zone("UTC")
+            .dt.convert_time_zone("America/New_York")
+            .dt.truncate(_FREQ_MAP.get(timespan, "1d"))
+        )
 
-    # transform unix timestamp to daily format
-    _FREQ_MAP = {
-        "second": "1s",
-        "minute": "1m",
-    }
-    df = df.with_columns(
-        pl.col("timestamp")
-        .cast(pl.Datetime("ms"))
-        .dt.replace_time_zone("UTC")
-        .dt.convert_time_zone("America/New_York")
-        .dt.truncate(_FREQ_MAP.get(kwargs.pop("timespan"), "1d"))
-    )
+        # Order the index columns first, leaving the metric columns as returned.
+        index = ["timestamp", "ticker"]
+        df = df.select(index + [col for col in df.columns if col not in index])
 
-    # pivot polars dataframe to semi-wide format
-    df = df.pivot(
-        values="value",
-        index=["timestamp", "ticker"],
-        on="metric"
-    )
-
-    return df.lazy()
+        return df.lazy()

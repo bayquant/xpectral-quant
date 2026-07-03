@@ -1,6 +1,6 @@
 # Xpectral Quant
 
-![Spectral decomposition](assets/xpectral_banner.gif)
+![Spectral decomposition](https://raw.githubusercontent.com/bayquant/xpectral-quant/main/assets/xpectral_banner.gif)
 
 Quant analytics and market data that extend **Polars** DataFrames via the
 accessor pattern.
