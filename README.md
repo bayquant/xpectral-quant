@@ -35,11 +35,6 @@ loads market-data credentials.
 file (loaded automatically on `import xpectral.data`). Create it with your keys;
 it is git-ignored and never committed.
 
-See each subpackage's README for module-level docs:
-
-- [`xpectral/quant/README.md`](xpectral/quant/README.md)
-- [`xpectral/data/README.md`](xpectral/data/README.md)
-
 ## Install
 
 ```bash

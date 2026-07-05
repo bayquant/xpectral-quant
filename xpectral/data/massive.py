@@ -5,7 +5,7 @@
 # Standard library imports
 from datetime import date
 from datetime import datetime
-from functools import lru_cache
+from typing import Literal
 import os
 
 # Other imports
@@ -13,6 +13,7 @@ from massive import RESTClient
 from massive.rest.models import Sort
 import polars as pl
 
+from ..utils.cache import timeseries_cache
 from ..utils.rate_limiter import RateLimiter
 
 # -----------------------------------------------------------------------------
@@ -20,13 +21,6 @@ from ..utils.rate_limiter import RateLimiter
 # -----------------------------------------------------------------------------
 
 __all__ = ["Massive"]
-
-# Map an aggregate timespan onto the polars duration used to truncate its
-# timestamp. Anything coarser than a minute is truncated to the day.
-_FREQ_MAP = {
-    "second": "1s",
-    "minute": "1m",
-}
 
 # -----------------------------------------------------------------------------
 # General API
@@ -58,59 +52,50 @@ class Massive:
             trace=False,
         )
         self._rate_limiter = rate_limiter
-        # Per-instance, bounded cache of fetched frames keyed by request args.
-        # Binding the wrapper here keeps `self` out of the cache key and avoids
-        # the cross-instance leak of decorating the method at class scope.
-        self._get_aggregate_bars = lru_cache(maxsize=10)(self._get_aggregate_bars)
 
     def get_aggregate_bars(
         self,
         tickers: list[str],
         multiplier: int,
-        timespan: str,
+        timespan: Literal[
+            "second",
+            "minute",
+            "hour",
+            "day",
+            "week",
+            "month",
+            "quarter",
+            "year",
+        ],
         from_: str | int | datetime | date,
         to: str | int | datetime | date,
         adjusted: bool = True,
         sort: str | Sort | None = None,
         limit: int | None = None,
+        tz: str = "America/New_York",
     ) -> pl.LazyFrame:
         """Fetch aggregate bars for ``tickers`` as a semi-wide LazyFrame.
+
+        The API returns each bar's timestamp as the start of its aggregate
+        window, so the timestamp is only converted to ``tz`` -- no
+        per-frequency alignment is applied, which works for any timespan.
 
         Args:
             tickers: Symbols to fetch.
             multiplier: Size of the timespan multiplier (e.g. ``5`` minutes).
-            timespan: Aggregate window (``"second"``, ``"minute"``, ``"day"``,
-                ...).
+            timespan: Aggregate window.
             from_: Start of the range, inclusive.
             to: End of the range, inclusive.
             adjusted: Whether results are adjusted for splits.
             sort: Sort direction for the returned bars.
-            limit: Maximum number of base aggregates queried per request.
+            limit: Maximum number of base aggregates queried per request;
+                pagination fetches the remainder of the range.
+            tz: Time zone the returned ``timestamp`` column is expressed in.
 
         Returns:
             LazyFrame with ``timestamp``/``ticker`` index columns followed by
             one column per aggregate metric.
         """
-        # Normalise tickers to a hashable tuple so the cached fetch can key on it.
-        return self._get_aggregate_bars(
-            tuple(tickers), multiplier, timespan, from_, to, adjusted, sort, limit
-        )
-
-    # -----------------------------------------------------------------------------
-    # Private API
-    # -----------------------------------------------------------------------------
-
-    def _get_aggregate_bars(
-        self,
-        tickers: tuple[str, ...],
-        multiplier: int,
-        timespan: str,
-        from_: str | int | datetime | date,
-        to: str | int | datetime | date,
-        adjusted: bool,
-        sort: str | Sort | None,
-        limit: int | None,
-    ) -> pl.LazyFrame:
         rows = []
         for ticker in tickers:
             if self._rate_limiter is not None:
@@ -130,14 +115,19 @@ class Massive:
 
         df = pl.DataFrame(rows)
 
-        # Transform the unix timestamp to New York local time, truncated to the
-        # aggregate's frequency.
+        # The API returns the window-start timestamp as unix milliseconds in
+        # UTC; express it in the requested time zone. No truncation is needed,
+        # which keeps the same code correct for every timespan.
         df = df.with_columns(
-            pl.col("timestamp")
-            .cast(pl.Datetime("ms"))
-            .dt.replace_time_zone("UTC")
-            .dt.convert_time_zone("America/New_York")
-            .dt.truncate(_FREQ_MAP.get(timespan, "1d"))
+            # e.g. 1704205805000 -> 2024-01-02 09:30:05-05:00 in New York:
+            pl.col("timestamp")  # 1704205805000 (int, epoch-ms, UTC)
+            .cast(pl.Datetime("ms"))  # 2024-01-02 14:30:05, naive datetime, no zone
+            .dt.replace_time_zone(
+                "UTC"
+            )  # 2024-01-02 14:30:05+00:00, stamp zone, no shift
+            .dt.convert_time_zone(
+                tz
+            )  # 2024-01-02 09:30:05-05:00, shift to tz wall clock
         )
 
         # Order the index columns first, leaving the metric columns as returned.
@@ -145,3 +135,7 @@ class Massive:
         df = df.select(index + [col for col in df.columns if col not in index])
 
         return df.lazy()
+
+    # -------------------------------------------------------------------------
+    # Private API
+    # -------------------------------------------------------------------------
