@@ -13,7 +13,6 @@ from massive import RESTClient
 from massive.rest.models import Sort
 import polars as pl
 
-from ..utils.cache import timeseries_cache
 from ..utils.rate_limiter import RateLimiter
 
 # -----------------------------------------------------------------------------
