@@ -3,10 +3,10 @@ xpectral.data
 
 Market data access via the Polygon/Massive API with caching and rate limiting.
 
-Massive
--------
+MassiveREST
+-----------
 
-.. automodule:: xpectral.data.massive
+.. automodule:: xpectral.data.rest_massive
    :members:
    :undoc-members:
    :show-inheritance:

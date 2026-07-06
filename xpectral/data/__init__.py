@@ -22,14 +22,18 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 # Imports (post-env)
 # -----------------------------------------------------------------------------
 
-from . import massive
+from . import flatfiles_massive
+from . import rest_massive
 from . import simulations
-from .massive import Massive
+from .flatfiles_massive import MassiveFlatFiles
+from .rest_massive import MassiveREST
 from .simulations import BrownianMotion
 
 __all__ = [
     "BrownianMotion",
-    "Massive",
-    "massive",
+    "MassiveFlatFiles",
+    "MassiveREST",
+    "flatfiles_massive",
+    "rest_massive",
     "simulations",
 ]

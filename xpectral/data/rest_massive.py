@@ -19,14 +19,14 @@ from ..utils.rate_limiter import RateLimiter
 # Globals and constants
 # -----------------------------------------------------------------------------
 
-__all__ = ["Massive"]
+__all__ = ["MassiveREST"]
 
 # -----------------------------------------------------------------------------
 # General API
 # -----------------------------------------------------------------------------
 
 
-class Massive:
+class MassiveREST:
     """Fetch aggregate bars from the Polygon/Massive API into Polars.
 
     Wraps a single :class:`massive.RESTClient` and returns OHLCV aggregate
