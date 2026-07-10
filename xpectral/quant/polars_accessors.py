@@ -1,30 +1,27 @@
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Imports
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 # Standard library imports
 
 # Other imports
 import polars as pl
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Globals and constants
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # General API
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 
 @pl.api.register_expr_namespace("quant")
 class QuantAccessor:
     def __init__(self, expr: pl.Expr):
         self._expr = expr
 
-    def returns(
-        self,
-        periods: int = 1,
-        over: str | None = None
-    ) -> pl.Expr:
+    def returns(self, periods: int = 1, over: str | None = None) -> pl.Expr:
         """
         Compute simple percentage return for the expression.
 
@@ -36,7 +33,11 @@ class QuantAccessor:
             Optional grouping column (e.g. 'ticker'). If None, compute over the full series.
         """
         expr = (self._expr / self._expr.shift(n=periods)) - 1
-        return expr.over(over).alias('return') if over is not None else expr.alias('return')
+        return (
+            expr.over(over).alias("return")
+            if over is not None
+            else expr.alias("return")
+        )
 
     def compound(
         self,
@@ -52,7 +53,11 @@ class QuantAccessor:
         """
         expr = (1 + self._expr).cum_prod().sub(1)
 
-        return expr.over(over).alias(f"compounded") if over is not None else expr.alias(f"compounded")
+        return (
+            expr.over(over).alias(f"compounded")
+            if over is not None
+            else expr.alias(f"compounded")
+        )
 
     def rolling_vol(
         self,
@@ -62,7 +67,7 @@ class QuantAccessor:
         min_samples: int | None = None,
         center: bool = False,
         ddof: int = 1,
-        over: str | None = None
+        over: str | None = None,
     ) -> pl.Expr:
         """
         Compute rolling volatility (standard deviation) for the expression.
@@ -89,7 +94,11 @@ class QuantAccessor:
             center=center,
             ddof=ddof,
         )
-        return expr.over(over).alias('rolling_vol') if over is not None else expr.alias('rolling_vol')
+        return (
+            expr.over(over).alias("rolling_vol")
+            if over is not None
+            else expr.alias("rolling_vol")
+        )
 
     def rolling_beta(
         self,
@@ -97,7 +106,7 @@ class QuantAccessor:
         window_size: int,
         min_periods: int | None = None,
         ddof: int = 1,
-        over: str | list[str] | None = None
+        over: str | list[str] | None = None,
     ) -> pl.Expr:
         """
         Compute rolling beta of this expression against a benchmark expression.
@@ -120,23 +129,23 @@ class QuantAccessor:
         pl.Expr
             Rolling beta expression
         """
-        expr = (
-            pl.rolling_cov(
-                a=self._expr,
-                b=benchmark_col,
-                window_size=window_size,
-                min_periods=min_periods,
-                ddof=ddof
-            )
-            / benchmark_col.rolling_var(
-                window_size=window_size,
-                min_periods=min_periods,
-                ddof=ddof
-            )
+        expr = pl.rolling_cov(
+            a=self._expr,
+            b=benchmark_col,
+            window_size=window_size,
+            min_periods=min_periods,
+            ddof=ddof,
+        ) / benchmark_col.rolling_var(
+            window_size=window_size, min_periods=min_periods, ddof=ddof
         )
 
-        return expr.over(over).alias('rolling_beta') if over is not None else expr.alias('rolling_beta')
+        return (
+            expr.over(over).alias("rolling_beta")
+            if over is not None
+            else expr.alias("rolling_beta")
+        )
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Private API
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
