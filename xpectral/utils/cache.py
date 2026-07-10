@@ -6,6 +6,7 @@
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 # Other imports
 from diskcache import Cache
@@ -14,7 +15,15 @@ from diskcache import Cache
 # Globals and constants
 # -----------------------------------------------------------------------------
 
-__all__ = ["disk_cache"]
+__all__ = ["EvictionPolicy", "disk_cache"]
+
+# The eviction policies diskcache accepts once ``size_limit`` is reached.
+EvictionPolicy = Literal[
+    "none",
+    "least-recently-stored",
+    "least-recently-used",
+    "least-frequently-used",
+]
 
 # Root under which every function gets its own cache subdirectory. Overridable
 # per call, or globally via the XPECTRAL_CACHE_DIR environment variable.
@@ -34,6 +43,7 @@ def disk_cache(
     expire: float | None = None,
     cache_dir: str | os.PathLike | None = None,
     size_limit: int = _SIZE_LIMIT,
+    eviction_policy: EvictionPolicy = "least-recently-used",
     typed: bool = False,
 ) -> Callable:
     """Cache a function's return values on disk, keyed by its arguments.
@@ -50,8 +60,12 @@ def disk_cache(
         cache_dir: Root directory for the cache. Defaults to the
             ``XPECTRAL_CACHE_DIR`` environment variable, else
             ``~/.cache/xpectral``.
-        size_limit: Byte cap for this function's cache before least-recently-used
-            entries are evicted.
+        size_limit: Byte cap for this function's cache before entries are evicted
+            per ``eviction_policy``.
+        eviction_policy: How entries are chosen for eviction once ``size_limit``
+            is reached. One of ``"least-recently-stored"``,
+            ``"least-recently-used"``, ``"least-frequently-used"``, or ``"none"``
+            (no automatic eviction).
         typed: When ``True``, arguments of different types are cached separately
             (e.g. ``1`` and ``1.0``).
 
@@ -67,7 +81,7 @@ def disk_cache(
         cache = Cache(
             directory=str(directory),
             size_limit=size_limit,
-            eviction_policy="least-recently-used",
+            eviction_policy=eviction_policy,
         )
         memoized = cache.memoize(expire=expire, typed=typed)(func)
         # Expose the backing Cache so callers can inspect or clear it, e.g.
