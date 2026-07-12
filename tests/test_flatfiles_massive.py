@@ -72,11 +72,9 @@ def _day_aggs_store() -> dict[str, bytes]:
     }
 
 
-def _make(tmp_path: Path, store: dict[str, bytes], monkeypatch) -> MassiveFlatFiles:
-    # Keep the parsed-frame cache off the real ~/.cache during tests.
-    monkeypatch.setenv("XPECTRAL_CACHE_DIR", str(tmp_path / "cache"))
+def _make(tmp_path: Path, store: dict[str, bytes]) -> MassiveFlatFiles:
     ff = MassiveFlatFiles(download_dir=tmp_path / "downloads")
-    ff._client = _FakeS3(store)
+    ff._s3._client = _FakeS3(store)
     return ff
 
 
@@ -121,89 +119,97 @@ def test_parse_flat_files_dtypes_tz_and_column_order(tmp_path):
     path = tmp_path / "2024-01-02.csv.gz"
     path.write_bytes(_gz(_DAY_AGGS_HEADER, _ROWS[date(2024, 1, 2)]))
 
-    df = flatfiles_massive._parse_flat_files(
-        (str(path),), "window_start", "America/New_York"
-    )
+    df = flatfiles_massive._parse_flat_files([path], "window_start", "America/New_York")
 
-    # Index columns first, raw timestamp column dropped.
-    assert df.columns[:2] == ["timestamp", "ticker"]
-    assert "window_start" not in df.columns
+    # Source timestamp column kept (not renamed) and placed first.
+    assert df.columns[:2] == ["window_start", "ticker"]
     # tz-aware nanosecond timestamp, converted from 14:30:00Z to 09:30 New York.
-    assert df.schema["timestamp"] == pl.Datetime("ns", "America/New_York")
-    ts = df.get_column("timestamp")[0]
+    assert df.schema["window_start"] == pl.Datetime("ns", "America/New_York")
+    ts = df.get_column("window_start")[0]
     assert (ts.hour, ts.minute) == (9, 30)
     assert str(ts.tzinfo) == "America/New_York"
 
 
-# --- download layer ----------------------------------------------------------
+def test_parse_flat_files_reconciles_dtype_drift(tmp_path):
+    # `volume` is an integer one day and fractional the next, so per-file
+    # inference yields Int64 vs Float64; concat must reconcile, not raise.
+    a = tmp_path / "a.csv.gz"
+    b = tmp_path / "b.csv.gz"
+    a.write_bytes(
+        _gz(
+            _DAY_AGGS_HEADER,
+            "187.0,188.0,183.0,184.0,AAPL,100,5000,1704205800000000000",
+        )
+    )
+    b.write_bytes(
+        _gz(
+            _DAY_AGGS_HEADER,
+            "185.0,186.0,182.0,184.0,AAPL,120,6000.5,1704292200000000000",
+        )
+    )
+
+    df = flatfiles_massive._parse_flat_files([a, b], "window_start", "America/New_York")
+    assert df.height == 2
+    assert df.schema["volume"] == pl.Float64
 
 
-def test_download_skips_existing_and_missing(tmp_path, monkeypatch):
+# --- high-level pipeline -----------------------------------------------------
+
+
+def test_get_flat_files_concats_and_reuses_downloads(tmp_path):
     store = _day_aggs_store()
-    ff = _make(tmp_path, store, monkeypatch)
-    keys = list(store)
-
-    # Pre-place the first file so only the second is fetched.
-    first = tmp_path / "downloads" / keys[0]
-    first.parent.mkdir(parents=True)
-    first.write_bytes(store[keys[0]])
-
-    missing_key = "us_stocks_sip/day_aggs_v1/2024/01/2024-01-06.csv.gz"  # weekend
-    paths = ff.download(keys + [missing_key])
-
-    assert ff._client.download_calls == [keys[1], missing_key]  # not keys[0]
-    assert {p.name for p in paths} == {"2024-01-02.csv.gz", "2024-01-03.csv.gz"}
-
-
-def test_list_objects(tmp_path, monkeypatch):
-    store = _day_aggs_store()
-    ff = _make(tmp_path, store, monkeypatch)
-    keys = ff.list_objects("us_stocks_sip/day_aggs_v1/2024/01")
-    assert sorted(keys) == sorted(store)
-
-
-# --- high-level pipeline + caching ------------------------------------------
-
-
-def test_get_flat_files_concats_and_caches(tmp_path, monkeypatch):
-    store = _day_aggs_store()
-
-    # Count real parse executions to prove the cache short-circuits the second call.
-    parse_calls = []
-    real_parse = flatfiles_massive._parse_flat_files
-
-    def counting_parse(*args):
-        parse_calls.append(1)
-        return real_parse(*args)
-
-    monkeypatch.setattr(flatfiles_massive, "_parse_flat_files", counting_parse)
-
-    ff = _make(tmp_path, store, monkeypatch)
+    ff = _make(tmp_path, store)
 
     lf = ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-03")
     assert isinstance(lf, pl.LazyFrame)
     df = lf.collect()
 
     assert df.height == 2  # concatenated across two days
-    assert df.columns[:2] == ["timestamp", "ticker"]
-    assert df.get_column("timestamp").dt.day().to_list() == [2, 3]
-    assert len(ff._client.download_calls) == 2
-    assert len(parse_calls) == 1
+    assert df.columns[:2] == ["window_start", "ticker"]
+    assert df.get_column("window_start").dt.day().to_list() == [2, 3]
+    assert len(ff._s3._client.download_calls) == 2
 
-    # Second call: files already local and parse result cached -> no new work.
+    # Default reuses the local .csv.gz files (disk cache); no re-download.
     df2 = ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-03").collect()
     assert df2.equals(df)
-    assert len(ff._client.download_calls) == 2  # nothing re-downloaded
-    assert len(parse_calls) == 1  # parse not re-executed
+    assert len(ff._s3._client.download_calls) == 2
 
 
-def test_get_flat_files_rejects_unknown_dataset(tmp_path, monkeypatch):
-    ff = _make(tmp_path, {}, monkeypatch)
+def test_get_flat_files_overwrite_refetches(tmp_path):
+    store = _day_aggs_store()
+    ff = _make(tmp_path, store)
+
+    ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-03")
+    assert len(ff._s3._client.download_calls) == 2
+
+    # overwrite=True forces a fresh download of the same days.
+    ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-03", overwrite=True)
+    assert len(ff._s3._client.download_calls) == 4
+
+
+def test_get_flat_files_offline_uses_cache(tmp_path):
+    store = _day_aggs_store()
+
+    # Online client populates the local cache.
+    online = _make(tmp_path, store)
+    online.get_flat_files("day_aggs", "2024-01-02", "2024-01-03")
+    assert len(online._s3._client.download_calls) == 2
+
+    # Offline client over the same download_dir reuses those files, no network.
+    offline = MassiveFlatFiles(download_dir=tmp_path / "downloads", offline=True)
+    offline._s3._client = _FakeS3(store)
+    df = offline.get_flat_files("day_aggs", "2024-01-02", "2024-01-03").collect()
+    assert df.height == 2
+    assert offline._s3._client.download_calls == []
+
+
+def test_get_flat_files_rejects_unknown_dataset(tmp_path):
+    ff = _make(tmp_path, {})
     with pytest.raises(ValueError):
         ff.get_flat_files("ticks", "2024-01-02", "2024-01-03")
 
 
-def test_get_flat_files_raises_when_nothing_found(tmp_path, monkeypatch):
-    ff = _make(tmp_path, {}, monkeypatch)  # empty store -> all keys 404
+def test_get_flat_files_raises_when_nothing_found(tmp_path):
+    ff = _make(tmp_path, {})  # empty store -> all keys 404
     with pytest.raises(ValueError):
         ff.get_flat_files("day_aggs", "2024-01-06", "2024-01-07")
