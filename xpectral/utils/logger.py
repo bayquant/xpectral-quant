@@ -3,60 +3,73 @@
 # -----------------------------------------------------------------------------
 
 # Standard library imports
+import logging
 import sys
-from dataclasses import dataclass
-from typing import Callable
-from typing import Dict
+from typing import Literal
 
 # -----------------------------------------------------------------------------
 # Globals and constants
 # -----------------------------------------------------------------------------
+
+__all__ = ["LogLevel", "setup_logging"]
+
+# Package-root logger. Modules log via ``logging.getLogger(__name__)``, which
+# descends from this as ``xpectral.*``.
+_ROOT = "xpectral"
+
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+# ANSI colors per level for the optional colored console handler.
+_COLORS = {
+    "DEBUG": "\033[94m",
+    "INFO": "\033[92m",
+    "WARNING": "\033[93m",
+    "ERROR": "\033[91m",
+    "CRITICAL": "\033[95m",
+}
+_RESET = "\033[0m"
+
+# Silent by default: a no-op handler on the package root stops Python's
+# last-resort handler from printing until the app opts in (via setup_logging or
+# its own logging config).
+logging.getLogger(_ROOT).addHandler(logging.NullHandler())
 
 # -----------------------------------------------------------------------------
 # General API
 # -----------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class LogLevel:
-    name: str
-    color: str  # ANSI color code
+def setup_logging(level: LogLevel = "INFO", *, color: bool = True) -> None:
+    """Turn on console logging for xpectral (opt-in, to stderr).
 
+    Apps that manage their own logging can ignore this and configure the
+    standard ``logging`` module directly. Color is applied only on a TTY.
+    """
+    logger = logging.getLogger(_ROOT)
+    # Replace a handler a previous call added so repeats don't duplicate output.
+    logger.handlers = [h for h in logger.handlers if isinstance(h, logging.NullHandler)]
+    logger.setLevel(level)
+    logger.propagate = False
 
-class ColorLogger:
-    _LEVELS: Dict[str, LogLevel] = {
-        "DEBUG": LogLevel("DEBUG", "\033[94m"),
-        "INFO": LogLevel("INFO", "\033[92m"),
-        "WARNING": LogLevel("WARNING", "\033[93m"),
-        "ERROR": LogLevel("ERROR", "\033[91m"),
-        "CRITICAL": LogLevel("CRITICAL", "\033[95m"),
-    }
-    _RESET = "\033[0m"
-
-    def __init__(self, name: str):
-        self.name = name
-        for level in self._LEVELS:
-            setattr(self, level.lower(), self._build_logger(level))
-
-    def _build_logger(self, level_name: str) -> Callable[..., None]:
-        def log(message: str, *args) -> None:
-            level = self._LEVELS[level_name]
-            formatted = message.format(*args)
-            output = (
-                f"{level.color}[{level.name}] {self.name}: {formatted}{self._RESET}"
-            )
-            print(
-                output,
-                file=sys.stderr if level_name in {"ERROR", "CRITICAL"} else sys.stdout,
-            )
-
-        return log
-
-
-def get_logger(name: str) -> ColorLogger:
-    return ColorLogger(name)
+    handler = logging.StreamHandler()
+    handler.setFormatter(_ColorFormatter(color and sys.stderr.isatty()))
+    logger.addHandler(handler)
 
 
 # -----------------------------------------------------------------------------
 # Private API
 # -----------------------------------------------------------------------------
+
+
+class _ColorFormatter(logging.Formatter):
+    """Render ``[LEVEL] name: message``, coloring the line when enabled."""
+
+    def __init__(self, color: bool):
+        super().__init__("[%(levelname)s] %(name)s: %(message)s")
+        self._color = color
+
+    def format(self, record: logging.LogRecord) -> str:
+        text = super().format(record)
+        if not self._color:
+            return text
+        return f"{_COLORS.get(record.levelname, '')}{text}{_RESET}"
