@@ -39,11 +39,16 @@ logging.getLogger(_ROOT).addHandler(logging.NullHandler())
 # -----------------------------------------------------------------------------
 
 
-def setup_logging(level: LogLevel = "INFO", *, color: bool = True) -> None:
+def setup_logging(
+    level: LogLevel = "INFO", *, color: bool = True, force_color: bool = False
+) -> None:
     """Turn on console logging for xpectral (opt-in, to stderr).
 
     Apps that manage their own logging can ignore this and configure the
-    standard ``logging`` module directly. Color is applied only on a TTY.
+    standard ``logging`` module directly. Color is applied only on a TTY, so
+    ANSI escapes don't leak into files or pipes; pass ``force_color=True`` to
+    color output regardless (e.g. in a notebook, which renders ANSI but is not
+    a TTY).
     """
     logger = logging.getLogger(_ROOT)
     # Replace a handler a previous call added so repeats don't duplicate output.
@@ -52,7 +57,9 @@ def setup_logging(level: LogLevel = "INFO", *, color: bool = True) -> None:
     logger.propagate = False
 
     handler = logging.StreamHandler()
-    handler.setFormatter(_ColorFormatter(color and sys.stderr.isatty()))
+    handler.setFormatter(
+        _ColorFormatter(color and (force_color or sys.stderr.isatty()))
+    )
     logger.addHandler(handler)
 
 
