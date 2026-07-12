@@ -4,6 +4,7 @@
 
 # Standard library imports
 from pathlib import Path
+import logging
 import os
 
 # Other imports
@@ -11,15 +12,13 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from .logger import get_logger
-
 # -----------------------------------------------------------------------------
 # Globals and constants
 # -----------------------------------------------------------------------------
 
 __all__ = ["S3Downloader"]
 
-_logger = get_logger("S3Downloader")
+_logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # General API
@@ -112,17 +111,17 @@ class S3Downloader:
                 paths.append(path)
                 continue
             if self._offline:
-                _logger.warning("offline, not cached; skipping: {}", key)
+                _logger.warning("offline, not cached; skipping: %s", key)
                 continue
             path.parent.mkdir(parents=True, exist_ok=True)
             try:
                 self._client.download_file(self._bucket, key, str(path))
             except ClientError as error:
                 if _is_missing(error):
-                    _logger.warning("no object for key, skipping: {}", key)
+                    _logger.warning("no object for key, skipping: %s", key)
                     continue
                 raise
-            _logger.info("downloaded {}", key)
+            _logger.info("downloaded %s", key)
             paths.append(path)
         return paths
 

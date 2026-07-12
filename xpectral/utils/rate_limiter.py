@@ -3,18 +3,16 @@
 # -----------------------------------------------------------------------------
 
 # Standard library imports
+import logging
 import time
 from collections import deque
 from typing import Deque
-
-# Other imports
-from .logger import get_logger
 
 # -----------------------------------------------------------------------------
 # Globals and constants
 # -----------------------------------------------------------------------------
 
-log = get_logger(name="rate_limiter")
+log = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # General API
@@ -41,7 +39,7 @@ class RateLimiter:
         if len(self._hits) >= self.calls:
             sleep_for = self.per_seconds - (now - self._hits[0])
             if sleep_for > 0:
-                log.info("sleeping for {:.0f} seconds", sleep_for)
+                log.info("sleeping for %.0f seconds", sleep_for)
                 time.sleep(sleep_for)
             self.acquire()
             return
