@@ -1,9 +1,15 @@
 repos:
   - repo: local
     hooks:
-      - id: black
-        name: Format with black
-        entry: uv run black
+      - id: ruff-check
+        name: Lint with ruff
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+        stages: [pre-commit]
+      - id: ruff-format
+        name: Format with ruff
+        entry: uv run ruff format
         language: system
         types: [python]
         stages: [pre-commit]

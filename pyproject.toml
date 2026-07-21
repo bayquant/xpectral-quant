@@ -32,7 +32,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "black",                          # code formatter
+    "ruff>=0.6",                      # code formatter
     "ipykernel>=7.0.1",               # jupyter notebook support
     "pre-commit",                     # git hook manager
     "pytest",                         # test runner
@@ -45,8 +45,18 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/bayquant/xpectral-quant"
 
-[tool.black]
-target-version = ["py312"]
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Line too long — handled by formatter, not linter
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["xpectral"]
 
 # `xpectral` is a PEP 420 namespace package shared with xpectral-chart, so it
 # has no top-level __init__.py. Ship only the quant half of the namespace.
