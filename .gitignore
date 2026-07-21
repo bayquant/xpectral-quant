@@ -45,7 +45,6 @@ coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
-pytest_cache/
 .pytest_cache/
 
 # Translations
@@ -88,8 +87,14 @@ Pipfile.lock
 # poetry
 poetry.lock
 
-# PEP 582; used by e.g. python-pm
+# PEP 582
 __pypackages__/
+
+# Ruff cache
+.ruff_cache/
+
+# Claude Code
+.claude/worktrees/
 
 # VS Code
 .vscode/
@@ -103,6 +108,7 @@ venv/
 .env/
 env/
 .env.*
+!.env.example
 .venv/
 
 # macOS
@@ -111,3 +117,9 @@ env/
 # Windows
 Thumbs.db
 
+# Project-specific data files
+*.parquet
+*.csv
+*.dbn
+*.dbn.zst
+logs/
