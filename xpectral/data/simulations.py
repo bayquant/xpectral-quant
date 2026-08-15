@@ -2,10 +2,7 @@
 # Imports
 # -----------------------------------------------------------------------------
 
-# Standard library imports
-from typing import Optional
-
-# Other imports
+# Third-party imports
 import numpy as np
 import polars as pl
 
@@ -34,7 +31,7 @@ class BrownianMotion:
         n_steps: int,
         n_paths: int = 1,
         dt: float = 1 / 252,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ):
         self.n_steps = n_steps
         self.n_paths = n_paths

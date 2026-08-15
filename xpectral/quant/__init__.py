@@ -2,9 +2,7 @@
 # Imports
 # -----------------------------------------------------------------------------
 
-# Standard library imports
-
-# Other imports
+# Local imports
 from .polars_accessors import QuantAccessor
 from .portfolio import Portfolio
 

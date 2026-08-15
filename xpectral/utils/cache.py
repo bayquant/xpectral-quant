@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
-# Other imports
+# Third-party imports
 from diskcache import Cache
 
 # -----------------------------------------------------------------------------

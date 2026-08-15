@@ -5,12 +5,12 @@
 # Standard library imports
 from pathlib import Path
 
+# Third-party imports
 import pytest
-
-# Other imports
 from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 
+# First-party imports
 from xpectral.utils.s3 import S3Downloader
 
 # -----------------------------------------------------------------------------

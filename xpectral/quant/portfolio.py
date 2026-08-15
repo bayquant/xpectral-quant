@@ -5,7 +5,7 @@
 # Standard library imports
 from typing import Dict
 
-# Other imports
+# Third-party imports
 import polars as pl
 
 # -----------------------------------------------------------------------------

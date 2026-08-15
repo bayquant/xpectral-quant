@@ -8,13 +8,13 @@ from datetime import date
 from datetime import datetime
 from typing import Literal
 
+# Third-party imports
 import polars as pl
-
-# Other imports
 from massive import RESTClient
 from massive.rest.models import Order
 from massive.rest.models import Sort
 
+# Local imports
 from ..utils.rate_limiter import RateLimiter
 
 # -----------------------------------------------------------------------------

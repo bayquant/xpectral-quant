@@ -5,7 +5,7 @@
 # Standard library imports
 from datetime import date
 
-# Other imports
+# First-party imports
 from xpectral.data import xml_treasury
 from xpectral.data.xml_treasury import USTreasuryRates
 

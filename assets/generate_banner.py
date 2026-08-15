@@ -1,9 +1,18 @@
 """Script to generate the xpectral decomposition banner GIF."""
 
+# -----------------------------------------------------------------------------
+# Imports
+# -----------------------------------------------------------------------------
+
+# Third-party imports
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
+
+# -----------------------------------------------------------------------------
+# Globals and constants
+# -----------------------------------------------------------------------------
 
 # --- Config ---
 N_FRAMES = 90

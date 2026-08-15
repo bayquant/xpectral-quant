@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 
-# Other imports
+# Third-party imports
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError

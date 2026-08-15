@@ -8,11 +8,12 @@ from datetime import date
 from datetime import datetime
 from pathlib import Path
 
-# Other imports
+# Third-party imports
 import polars as pl
 import pytest
 from botocore.exceptions import ClientError
 
+# First-party imports
 from xpectral.data import flatfiles_massive
 from xpectral.data.flatfiles_massive import MassiveFlatFiles
 
