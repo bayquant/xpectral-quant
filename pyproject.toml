@@ -64,3 +64,6 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["xpectral"]
 force-single-line = true
+
+[tool.ruff.lint.per-file-ignores]
+"xpectral/data/__init__.py" = ["E402"]
