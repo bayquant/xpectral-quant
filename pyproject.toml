@@ -35,14 +35,15 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.6",                      # code formatter and linter
-    "pre-commit>=4.4.0",              # git hook manager
-    "pytest>=8.0.0",                  # test runner
-    "ipykernel>=7.0.1",               # jupyter notebook support
-    "furo>=2024.0",                   # sphinx theme for docs
-    "myst-parser>=3.0",               # markdown support in sphinx docs
-    "sphinx>=8.0",                    # sphinx documentation generator
-    "sphinx-autodoc-typehints>=2.0",  # type hint rendering in sphinx docs
+    "ruff>=0.6", # code formatter and linter
+    "pre-commit>=4.4.0", # git hook manager
+    "pytest>=8.0.0", # test runner
+    "ipykernel>=7.0.1", # jupyter notebook support
+    "furo>=2024.0", # sphinx theme for docs
+    "myst-parser>=3.0", # markdown support in sphinx docs
+    "sphinx>=8.0", # sphinx documentation generator
+    "sphinx-autodoc-typehints>=2.0", # type hint rendering in sphinx docs
+    "matplotlib>=3.11.1",
 ]
 
 # `xpectral` is a PEP 420 namespace package shared with xpectral-chart, so it
@@ -62,3 +63,4 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["xpectral"]
+force-single-line = true

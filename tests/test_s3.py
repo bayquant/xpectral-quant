@@ -5,7 +5,10 @@
 # Standard library imports
 from pathlib import Path
 
+import pytest
+
 # Other imports
+from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 
 from xpectral.utils.s3 import S3Downloader
@@ -127,18 +130,18 @@ def test_download_dest_dir_overrides_root(tmp_path):
     assert paths == [other / "other/c.csv.gz"]
 
 
-def test_offline_uses_only_local_files(tmp_path):
-    dl = S3Downloader(bucket=_BUCKET, dest_dir=tmp_path, offline=True)
-    dl._client = _FakeS3(dict(_STORE))
+def test_download_raises_on_connection_failure(tmp_path):
+    # A genuine connectivity failure (DNS/timeout/etc.) is a BotoCoreError,
+    # not a ClientError -- it must not be swallowed like a missing object.
+    class _UnreachableS3:
+        def download_file(self, Bucket, Key, Filename):
+            raise BotoCoreError()
 
-    # One key already on disk, one only in the remote store.
-    local = tmp_path / "data/2024/01/a.csv.gz"
-    local.parent.mkdir(parents=True)
-    local.write_bytes(_STORE["data/2024/01/a.csv.gz"])
+    dl = S3Downloader(bucket=_BUCKET, dest_dir=tmp_path)
+    dl._client = _UnreachableS3()
 
-    paths = dl.download(["data/2024/01/a.csv.gz", "data/2024/01/b.csv.gz"])
-    assert paths == [local]  # only the local file; the remote-only key is skipped
-    assert dl._client.download_calls == []  # no network call at all
+    with pytest.raises(BotoCoreError):
+        dl.download(["data/2024/01/a.csv.gz"])
 
 
 # --- list --------------------------------------------------------------------

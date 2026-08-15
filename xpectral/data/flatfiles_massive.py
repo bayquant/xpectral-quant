@@ -3,15 +3,16 @@
 # -----------------------------------------------------------------------------
 
 # Standard library imports
+import os
+import tempfile
 from datetime import date
-from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
-import os
 
-# Other imports
+# Third-party imports
 import polars as pl
 
+# Local imports
 from ..utils.s3 import S3Downloader
 
 # -----------------------------------------------------------------------------
@@ -24,19 +25,72 @@ __all__ = ["MassiveFlatFiles"]
 # ``global_forex``, ``global_crypto``) are reached by passing ``prefix``.
 _DEFAULT_PREFIX = "us_stocks_sip"
 
-# Concrete stock datasets: logical name -> (object-key folder, the epoch-ns
-# column promoted to the tz-aware ``timestamp`` index). The folders are shared
-# across asset classes, so this registry doubles as the generic key/parse spec
-# for any prefix that exposes the same datasets.
+# Concrete stock datasets: logical name -> object-key folder. The folders are
+# shared across asset classes, so this registry doubles as the generic key
+# spec for any prefix that exposes the same datasets.
 _DATASETS = {
-    "trades": ("trades_v1", "sip_timestamp"),
-    "quotes": ("quotes_v1", "sip_timestamp"),
-    "minute_aggs": ("minute_aggs_v1", "window_start"),
-    "day_aggs": ("day_aggs_v1", "window_start"),
+    "trades": "trades_v1",
+    "quotes": "quotes_v1",
+    "minute_aggs": "minute_aggs_v1",
+    "day_aggs": "day_aggs_v1",
 }
 
-# Default local download root: a ``flatfiles`` subdir of the shared cache root.
-_DEFAULT_DOWNLOAD_DIR = Path.home() / ".cache" / "xpectral" / "flatfiles"
+# Every column, across the datasets above, that holds an epoch-nanosecond
+# timestamp -- all of them are converted to tz-aware datetimes on load.
+# trades/quotes carry three independent clocks side by side:
+#   participant_timestamp: when the originating exchange or broker-dealer
+#       generated/executed the trade.
+#   sip_timestamp: when the Securities Information Processor (SIP) received
+#       the trade for inclusion in the consolidated tape.
+#   trf_timestamp: when a Trade Reporting Facility (TRF) received the trade
+#       report, only for off-exchange/OTC trades.
+# aggs carry only their window start.
+_TIMESTAMP_COLUMNS = {
+    "participant_timestamp",
+    "sip_timestamp",
+    "trf_timestamp",
+    "window_start",
+}
+
+# Documented dtype for every column across trades/quotes/minute_aggs/day_aggs
+# (https://massive.com/docs/flat-files/stocks/{trades,quotes,minute-aggregates,
+# day-aggregates}). Every day's CSV is cast to this schema before being
+# written to parquet, so a column can never drift dtype (e.g. an
+# all-integer ``volume`` one day, fractional the next) across cached files --
+# without this, files scanned together would need per-file schema
+# reconciliation, which is slower than a single multi-file scan.
+_COLUMN_DTYPES = {
+    "ticker": pl.String,
+    "id": pl.String,
+    "conditions": pl.Int64,
+    "correction": pl.Int64,
+    "exchange": pl.Int64,
+    "sequence_number": pl.Int64,
+    "tape": pl.Int64,
+    "trf_id": pl.Int64,
+    "ask_exchange": pl.Int64,
+    "bid_exchange": pl.Int64,
+    "indicators": pl.Int64,
+    "transactions": pl.Int64,
+    "participant_timestamp": pl.Int64,
+    "sip_timestamp": pl.Int64,
+    "trf_timestamp": pl.Int64,
+    "window_start": pl.Int64,
+    "price": pl.Float64,
+    "size": pl.Float64,
+    "ask_price": pl.Float64,
+    "ask_size": pl.Float64,
+    "bid_price": pl.Float64,
+    "bid_size": pl.Float64,
+    "open": pl.Float64,
+    "high": pl.Float64,
+    "low": pl.Float64,
+    "close": pl.Float64,
+    "volume": pl.Float64,
+}
+
+# Default local cache root: a ``massive`` subdir of the shared cache root.
+_DEFAULT_DOWNLOAD_DIR = Path.home() / ".cache" / "xpectral" / "massive"
 
 # -----------------------------------------------------------------------------
 # General API
@@ -46,10 +100,15 @@ _DEFAULT_DOWNLOAD_DIR = Path.home() / ".cache" / "xpectral" / "flatfiles"
 class MassiveFlatFiles:
     """Fetch Massive (formerly Polygon.io) S3 flat files into Polars.
 
-    Resolves the per-day object keys for a dataset and date range, downloads the
-    gzipped CSVs via a generic :class:`~xpectral.utils.s3.S3Downloader`, and
-    parses them into a semi-wide ``pl.LazyFrame`` with the dataset's tz-aware
-    timestamp column and ``ticker`` first -- mirroring
+    Resolves the per-day object keys for a dataset and date range, downloads
+    any gzipped CSVs not already cached (via a generic
+    :class:`~xpectral.utils.s3.S3Downloader` into a scratch temp directory),
+    and writes each day's raw rows to a local Hive-partitioned parquet cache
+    (``download_dir/prefix/folder/year=YYYY/month=MM/YYYY-MM-DD.parquet``) --
+    the temp CSV is discarded once its parquet file is written, so only
+    parquet is kept on disk. Reads scan that cache and convert every
+    recognized epoch-ns timestamp column to a tz-aware datetime, returning a
+    semi-wide ``pl.LazyFrame`` with ``ticker`` first -- mirroring
     :class:`~xpectral.data.rest_massive.MassiveREST`.
 
     The flat-files S3 credentials are issued in the Massive Dashboard and are
@@ -58,11 +117,11 @@ class MassiveFlatFiles:
     Args:
         access_key: S3 access key. Defaults to ``MASSIVE_S3_ACCESS_KEY``.
         secret_key: S3 secret key. Defaults to ``MASSIVE_S3_SECRET_KEY``.
-        download_dir: Root for downloaded ``.csv.gz`` files. Defaults to
-            ``~/.cache/xpectral/flatfiles``.
-        offline: When True, use only flat files already under ``download_dir``
-            and make no network calls -- for working against the local cache
-            without an active subscription.
+        download_dir: Root for the local Hive-partitioned parquet cache.
+            Defaults to ``~/.cache/xpectral/massive``.
+        offline: When True, use only parquet files already cached under
+            ``download_dir`` and make no network calls -- for working against
+            the local cache without an active subscription.
     """
 
     def __init__(
@@ -72,68 +131,126 @@ class MassiveFlatFiles:
         download_dir: str | os.PathLike | None = None,
         offline: bool = False,
     ):
-        dest_dir = (
+        self._download_dir = (
             Path(download_dir) if download_dir is not None else _DEFAULT_DOWNLOAD_DIR
         )
+        self._offline = offline
         self._s3 = S3Downloader(
             bucket="flatfiles",
-            dest_dir=dest_dir,
+            dest_dir=self._download_dir,
             endpoint_url="https://files.massive.com",
             access_key=access_key or os.getenv("MASSIVE_S3_ACCESS_KEY", ""),
             secret_key=secret_key or os.getenv("MASSIVE_S3_SECRET_KEY", ""),
-            offline=offline,
         )
 
     def get_flat_files(
         self,
         dataset: str,
-        from_: str | date | datetime,
-        to: str | date | datetime,
+        start: str | date,
+        end: str | date,
         prefix: str = _DEFAULT_PREFIX,
         tz: str = "America/New_York",
         overwrite: bool = False,
     ) -> pl.LazyFrame:
-        """Download and parse a dataset over a date range into a LazyFrame.
+        """Load a dataset over a date range into a LazyFrame, caching as parquet.
 
         Resolves one object key per calendar day in the inclusive
-        ``from_``..``to`` range, downloads any not already on disk, parses each
-        gzipped CSV, and concatenates across days. The dataset's epoch-nanosecond
-        timestamp column is converted to a tz-aware datetime in place (keeping its
-        source name) and placed first.
+        ``start``..``end`` range. Days not already cached locally are
+        downloaded and converted to parquet (see class docstring); the
+        resulting cache is then scanned for the full range. Every recognized
+        timestamp column present (``participant_timestamp``,
+        ``sip_timestamp``, ``trf_timestamp``, ``window_start``) is converted
+        from raw epoch nanoseconds to a tz-aware datetime, keeping its source
+        name.
 
         Args:
             dataset: One of ``trades``, ``quotes``, ``minute_aggs``,
                 ``day_aggs``.
-            from_: Start of the range, inclusive.
-            to: End of the range, inclusive.
+            start: Start of the range, inclusive.
+            end: End of the range, inclusive.
             prefix: Asset-class prefix. Defaults to ``us_stocks_sip``.
-            tz: Time zone the timestamp column is expressed in.
-            overwrite: Re-download files that already exist locally. By default
-                the downloaded ``.csv.gz`` files are reused as an on-disk cache
-                (historical flat files are immutable); pass ``True`` to force a
-                fresh fetch, e.g. for a recent day that may still be finalizing.
-                No effect when the client is offline.
+            tz: Time zone the timestamp columns are expressed in.
+            overwrite: Rebuild the parquet cache for days that already have
+                a cached file, re-fetching them from S3. By default cached
+                days are reused (historical flat files are immutable); pass
+                ``True`` to force a fresh fetch, e.g. for a recent day that
+                may still be finalizing. No effect when the client is
+                offline.
 
         Returns:
-            LazyFrame with the dataset's timestamp column and ``ticker`` first,
-            followed by its remaining columns.
+            LazyFrame with ``ticker`` first, followed by its remaining
+            columns in their on-disk order.
         """
         if dataset not in _DATASETS:
             raise ValueError(
                 f"unknown dataset {dataset!r}; expected one of {sorted(_DATASETS)}"
             )
-        folder, timestamp_col = _DATASETS[dataset]
+        folder = _DATASETS[dataset]
 
-        keys = _resolve_keys(prefix, folder, from_, to)
-        # Reuse already-downloaded files by default; they act as an on-disk cache.
-        paths = self._s3.download(keys, overwrite=overwrite)
+        # ``date.fromisoformat`` only accepts ``YYYY-MM-DD``, so ``str(value)``
+        # round-trips a ``date`` (or an ISO date string) but rejects a
+        # ``datetime`` (whose ``str()`` includes a time component).
+        days = _date_range(date.fromisoformat(str(start)), date.fromisoformat(str(end)))
+        self._cache_days(prefix, folder, days, overwrite=overwrite)
+
+        paths = [
+            path
+            for day in days
+            if (path := _parquet_path(self._download_dir, prefix, folder, day)).exists()
+        ]
         if not paths:
             raise ValueError(
-                f"no flat files found for {prefix}/{folder} in {from_}..{to}"
+                f"no flat files found for {prefix}/{folder} in {start}..{end}"
             )
 
-        # Parse the downloaded files in a stable, sorted order.
-        return _parse_flat_files(sorted(paths), timestamp_col, tz).lazy()
+        return _load_parquet_files(paths, tz)
+
+    # -------------------------------------------------------------------------
+    # Private API
+    # -------------------------------------------------------------------------
+
+    def _cache_days(
+        self,
+        prefix: str,
+        folder: str,
+        days: list[date],
+        overwrite: bool,
+    ) -> None:
+        """Ensure each day's Hive parquet file is on disk, downloading gaps.
+
+        Missing days are fetched as gzipped CSV into a scratch temp
+        directory, parsed with their raw (unconverted) values, cast to the
+        documented dtype for each recognized column, written to the local
+        ``year=/month=/<date>.parquet`` cache, and the temp CSV is discarded
+        -- only the parquet form is kept. When offline, no network is
+        attempted at all -- ``get_flat_files`` falls back to whatever is
+        already cached.
+        """
+        if self._offline:
+            return
+
+        pending = [
+            day
+            for day in days
+            if overwrite
+            or not _parquet_path(self._download_dir, prefix, folder, day).exists()
+        ]
+        if not pending:
+            return
+
+        keys = [_flat_file_key(prefix, folder, day) for day in pending]
+        key_to_day = dict(zip(keys, pending))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            csv_paths = self._s3.download(keys, dest_dir=tmp_dir)
+            for csv_path in csv_paths:
+                key = csv_path.relative_to(tmp_dir).as_posix()
+                out_path = _parquet_path(
+                    self._download_dir, prefix, folder, key_to_day[key]
+                )
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                _read_csv(csv_path).write_parquet(out_path)
 
 
 # -----------------------------------------------------------------------------
@@ -141,61 +258,60 @@ class MassiveFlatFiles:
 # -----------------------------------------------------------------------------
 
 
-def _parse_flat_files(
-    paths: list[Path],
-    timestamp_col: str,
-    tz: str,
-) -> pl.DataFrame:
-    """Read gzipped CSV flat files into one tz-indexed DataFrame.
+def _read_csv(path: Path) -> pl.DataFrame:
+    """Read a flat-file CSV, casting recognized columns to their documented dtype.
 
-    Returns a materialized ``pl.DataFrame``; the caller applies ``.lazy()`` at
-    the boundary so the public return type is a ``pl.LazyFrame``.
+    Passing ``_COLUMN_DTYPES`` as ``schema_overrides`` applies only to columns
+    actually present in ``path`` -- unmapped columns pass through with their
+    inferred dtype, and mapped ones never drift across cached days.
     """
-    # Polars decompresses ``.csv.gz`` transparently when given the path.
-    # ``vertical_relaxed`` reconciles a column whose inferred dtype differs across
-    # days (e.g. Int64 one day, Float64 another) by casting to a common supertype.
-    frames = [pl.read_csv(path) for path in paths]
-    df = pl.concat(frames, how="vertical_relaxed")
+    return pl.read_csv(path, schema_overrides=_COLUMN_DTYPES)
 
-    # Flat-file timestamps are epoch nanoseconds in UTC; express them in ``tz``
-    # in place, keeping the source column name.
-    df = df.with_columns(
-        pl.col(timestamp_col)
+
+def _load_parquet_files(paths: list[Path], tz: str) -> pl.LazyFrame:
+    """Scan Hive-partitioned parquet files into one tz-aware LazyFrame.
+
+    Raw flat-file timestamps are epoch nanoseconds in UTC; every recognized
+    timestamp column present is converted to a tz-aware datetime in ``tz``,
+    keeping its source name.
+    """
+    lf = pl.scan_parquet(sorted(paths), hive_partitioning=True)
+    schema_names = lf.collect_schema().names()
+
+    convert = [col for col in schema_names if col in _TIMESTAMP_COLUMNS]
+    lf = lf.with_columns(
+        pl.col(col)
         .cast(pl.Datetime("ns"))
         .dt.replace_time_zone("UTC")
         .dt.convert_time_zone(tz)
+        for col in convert
     )
 
-    # Timestamp and ticker columns first.
-    index = [timestamp_col, "ticker"]
-    rest = [col for col in df.columns if col not in index]
-    return df.select(index + rest)
+    # Ticker first; drop the Hive partition columns (``year``/``month``),
+    # which are cache-layout artifacts, not source data.
+    rest = [col for col in schema_names if col not in ("ticker", "year", "month")]
+    return lf.select(["ticker"] + rest)
 
 
-def _resolve_keys(
-    prefix: str,
-    folder: str,
-    from_: str | date | datetime,
-    to: str | date | datetime,
-) -> list[str]:
-    """Resolve the per-day object keys for an inclusive date range."""
-    start = _to_date(from_)
-    end = _to_date(to)
+def _parquet_path(download_dir: Path, prefix: str, folder: str, day: date) -> Path:
+    """Local Hive-partitioned cache path for one day of a dataset."""
+    return (
+        download_dir
+        / prefix
+        / folder
+        / f"year={day.year}"
+        / f"month={day.month:02d}"
+        / f"{day.isoformat()}.parquet"
+    )
+
+
+def _flat_file_key(prefix: str, folder: str, day: date) -> str:
+    """S3 object key for one day, e.g. ``us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz``."""
+    return f"{prefix}/{folder}/{day:%Y/%m}/{day.isoformat()}.csv.gz"
+
+
+def _date_range(start: date, end: date) -> list[date]:
+    """Inclusive list of calendar days from ``start`` to ``end``."""
     if end < start:
         raise ValueError(f"end date {end} precedes start date {start}")
-
-    # e.g. us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz
-    days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
-    return [f"{prefix}/{folder}/{day:%Y/%m}/{day.isoformat()}.csv.gz" for day in days]
-
-
-def _to_date(value: str | date | datetime) -> date:
-    """Coerce a date-like value to a :class:`datetime.date`."""
-    # ``datetime`` subclasses ``date``, so test it first.
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        return date.fromisoformat(value)
-    raise TypeError(f"unsupported date value: {value!r}")
+    return [start + timedelta(days=i) for i in range((end - start).days + 1)]

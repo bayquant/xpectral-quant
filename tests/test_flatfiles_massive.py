@@ -3,10 +3,10 @@
 # -----------------------------------------------------------------------------
 
 # Standard library imports
+import gzip
 from datetime import date
 from datetime import datetime
 from pathlib import Path
-import gzip
 
 # Other imports
 import polars as pl
@@ -78,79 +78,33 @@ def _make(tmp_path: Path, store: dict[str, bytes]) -> MassiveFlatFiles:
     return ff
 
 
-# --- object-key resolution ---------------------------------------------------
+# --- object-key / cache-path resolution ---------------------------------------
 
 
-def test_resolve_keys_padding_and_inclusive_range():
-    keys = flatfiles_massive._resolve_keys(
-        "us_stocks_sip", "trades_v1", "2024-01-02", "2024-01-04"
+def test_flat_file_key():
+    key = flatfiles_massive._flat_file_key(
+        "us_stocks_sip", "trades_v1", date(2024, 1, 2)
     )
-    assert keys == [
-        "us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz",
-        "us_stocks_sip/trades_v1/2024/01/2024-01-03.csv.gz",
-        "us_stocks_sip/trades_v1/2024/01/2024-01-04.csv.gz",
-    ]
+    assert key == "us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz"
 
 
-def test_resolve_keys_accepts_date_and_datetime_and_crosses_month():
-    keys = flatfiles_massive._resolve_keys(
-        "global_crypto",
-        "minute_aggs_v1",
-        date(2024, 1, 31),
-        datetime(2024, 2, 1, 16, 0),
+def test_parquet_path_is_hive_partitioned():
+    path = flatfiles_massive._parquet_path(
+        Path("/cache"), "us_stocks_sip", "trades_v1", date(2024, 1, 2)
     )
-    assert keys == [
-        "global_crypto/minute_aggs_v1/2024/01/2024-01-31.csv.gz",
-        "global_crypto/minute_aggs_v1/2024/02/2024-02-01.csv.gz",
-    ]
+    assert path == Path(
+        "/cache/us_stocks_sip/trades_v1/year=2024/month=01/2024-01-02.parquet"
+    )
 
 
-def test_resolve_keys_rejects_reversed_range():
+def test_date_range_inclusive_and_crosses_month():
+    days = flatfiles_massive._date_range(date(2024, 1, 31), date(2024, 2, 1))
+    assert days == [date(2024, 1, 31), date(2024, 2, 1)]
+
+
+def test_date_range_rejects_reversed_range():
     with pytest.raises(ValueError):
-        flatfiles_massive._resolve_keys(
-            "us_stocks_sip", "trades_v1", "2024-01-04", "2024-01-02"
-        )
-
-
-# --- CSV.gz parsing ----------------------------------------------------------
-
-
-def test_parse_flat_files_dtypes_tz_and_column_order(tmp_path):
-    path = tmp_path / "2024-01-02.csv.gz"
-    path.write_bytes(_gz(_DAY_AGGS_HEADER, _ROWS[date(2024, 1, 2)]))
-
-    df = flatfiles_massive._parse_flat_files([path], "window_start", "America/New_York")
-
-    # Source timestamp column kept (not renamed) and placed first.
-    assert df.columns[:2] == ["window_start", "ticker"]
-    # tz-aware nanosecond timestamp, converted from 14:30:00Z to 09:30 New York.
-    assert df.schema["window_start"] == pl.Datetime("ns", "America/New_York")
-    ts = df.get_column("window_start")[0]
-    assert (ts.hour, ts.minute) == (9, 30)
-    assert str(ts.tzinfo) == "America/New_York"
-
-
-def test_parse_flat_files_reconciles_dtype_drift(tmp_path):
-    # `volume` is an integer one day and fractional the next, so per-file
-    # inference yields Int64 vs Float64; concat must reconcile, not raise.
-    a = tmp_path / "a.csv.gz"
-    b = tmp_path / "b.csv.gz"
-    a.write_bytes(
-        _gz(
-            _DAY_AGGS_HEADER,
-            "187.0,188.0,183.0,184.0,AAPL,100,5000,1704205800000000000",
-        )
-    )
-    b.write_bytes(
-        _gz(
-            _DAY_AGGS_HEADER,
-            "185.0,186.0,182.0,184.0,AAPL,120,6000.5,1704292200000000000",
-        )
-    )
-
-    df = flatfiles_massive._parse_flat_files([a, b], "window_start", "America/New_York")
-    assert df.height == 2
-    assert df.schema["volume"] == pl.Float64
+        flatfiles_massive._date_range(date(2024, 1, 4), date(2024, 1, 2))
 
 
 # --- high-level pipeline -----------------------------------------------------
@@ -165,14 +119,68 @@ def test_get_flat_files_concats_and_reuses_downloads(tmp_path):
     df = lf.collect()
 
     assert df.height == 2  # concatenated across two days
-    assert df.columns[:2] == ["window_start", "ticker"]
+    assert df.columns[0] == "ticker"
     assert df.get_column("window_start").dt.day().to_list() == [2, 3]
     assert len(ff._s3._client.download_calls) == 2
 
-    # Default reuses the local .csv.gz files (disk cache); no re-download.
+    # Default reuses the local parquet cache; no re-download.
     df2 = ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-03").collect()
     assert df2.equals(df)
     assert len(ff._s3._client.download_calls) == 2
+
+
+def test_get_flat_files_caches_as_parquet_only(tmp_path):
+    store = _day_aggs_store()
+    ff = _make(tmp_path, store)
+
+    ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-02")
+
+    files = list((tmp_path / "downloads").rglob("*"))
+    suffixes = {f.suffix for f in files if f.is_file()}
+    assert suffixes == {".parquet"}  # no .csv.gz left on disk
+
+    cached = tmp_path / "downloads" / "us_stocks_sip" / "day_aggs_v1"
+    assert (cached / "year=2024" / "month=01" / "2024-01-02.parquet").exists()
+
+
+def test_get_flat_files_column_dtypes_and_tz_conversion(tmp_path):
+    store = _day_aggs_store()
+    ff = _make(tmp_path, store)
+
+    df = ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-02").collect()
+
+    # tz-aware nanosecond timestamp, converted from 14:30:00Z to 09:30 New York.
+    assert df.schema["window_start"] == pl.Datetime("ns", "America/New_York")
+    ts = df.get_column("window_start")[0]
+    assert (ts.hour, ts.minute) == (9, 30)
+    assert str(ts.tzinfo) == "America/New_York"
+
+    # Documented dtypes applied: transactions is integer, volume/OHLC are float.
+    assert df.schema["transactions"] == pl.Int64
+    assert df.schema["volume"] == pl.Float64
+    assert df.schema["close"] == pl.Float64
+
+
+def test_get_flat_files_reconciles_dtype_drift_across_days(tmp_path):
+    # ``volume`` is an integer on one day and fractional the next; each day is
+    # cast to the documented (float) dtype at write time, so the two cached
+    # parquet files never disagree and can be scanned together in one pass.
+    store = {
+        "us_stocks_sip/day_aggs_v1/2024/01/2024-01-02.csv.gz": _gz(
+            _DAY_AGGS_HEADER,
+            "187.0,188.0,183.0,184.0,AAPL,100,5000,1704205800000000000",
+        ),
+        "us_stocks_sip/day_aggs_v1/2024/01/2024-01-03.csv.gz": _gz(
+            _DAY_AGGS_HEADER,
+            "185.0,186.0,182.0,184.0,AAPL,120,6000.5,1704292200000000000",
+        ),
+    }
+    ff = _make(tmp_path, store)
+
+    df = ff.get_flat_files("day_aggs", "2024-01-02", "2024-01-03").collect()
+    assert df.height == 2
+    assert df.schema["volume"] == pl.Float64
+    assert df.get_column("volume").to_list() == [5000.0, 6000.5]
 
 
 def test_get_flat_files_overwrite_refetches(tmp_path):
@@ -213,3 +221,12 @@ def test_get_flat_files_raises_when_nothing_found(tmp_path):
     ff = _make(tmp_path, {})  # empty store -> all keys 404
     with pytest.raises(ValueError):
         ff.get_flat_files("day_aggs", "2024-01-06", "2024-01-07")
+
+
+def test_get_flat_files_rejects_datetime(tmp_path):
+    # ``datetime`` is a ``date`` subclass, so it can't be told apart from a
+    # calendar date by type alone; a bare datetime's ``str()`` includes a time
+    # component, which ``date.fromisoformat`` rejects.
+    ff = _make(tmp_path, {})
+    with pytest.raises(ValueError):
+        ff.get_flat_files("day_aggs", datetime(2024, 1, 2), datetime(2024, 1, 3))
