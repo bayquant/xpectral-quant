@@ -190,7 +190,14 @@ class MassiveFlatFiles:
         # ``date.fromisoformat`` only accepts ``YYYY-MM-DD``, so ``str(value)``
         # round-trips a ``date`` (or an ISO date string) but rejects a
         # ``datetime`` (whose ``str()`` includes a time component).
-        days = _date_range(date.fromisoformat(str(start)), date.fromisoformat(str(end)))
+        start_date = date.fromisoformat(str(start))
+        end_date = date.fromisoformat(str(end))
+        if end_date < start_date:
+            raise ValueError(f"end date {end_date} precedes start date {start_date}")
+        days = [
+            start_date + timedelta(days=i)
+            for i in range((end_date - start_date).days + 1)
+        ]
         self._cache_days(prefix, folder, days, overwrite=overwrite)
 
         paths = [
@@ -238,7 +245,10 @@ class MassiveFlatFiles:
         if not pending:
             return
 
-        keys = [_flat_file_key(prefix, folder, day) for day in pending]
+        # e.g. ``us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz``.
+        keys = [
+            f"{prefix}/{folder}/{day:%Y/%m}/{day.isoformat()}.csv.gz" for day in pending
+        ]
         key_to_day = dict(zip(keys, pending))
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -250,22 +260,17 @@ class MassiveFlatFiles:
                     self._download_dir, prefix, folder, key_to_day[key]
                 )
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                _read_csv(csv_path).write_parquet(out_path)
+                # ``schema_overrides`` applies only to columns actually present
+                # in csv_path -- unmapped columns pass through with their
+                # inferred dtype, and mapped ones never drift across cached
+                # days.
+                df = pl.read_csv(csv_path, schema_overrides=_COLUMN_DTYPES)
+                df.write_parquet(out_path)
 
 
 # -----------------------------------------------------------------------------
 # Private API
 # -----------------------------------------------------------------------------
-
-
-def _read_csv(path: Path) -> pl.DataFrame:
-    """Read a flat-file CSV, casting recognized columns to their documented dtype.
-
-    Passing ``_COLUMN_DTYPES`` as ``schema_overrides`` applies only to columns
-    actually present in ``path`` -- unmapped columns pass through with their
-    inferred dtype, and mapped ones never drift across cached days.
-    """
-    return pl.read_csv(path, schema_overrides=_COLUMN_DTYPES)
 
 
 def _load_parquet_files(paths: list[Path], tz: str) -> pl.LazyFrame:
@@ -303,15 +308,3 @@ def _parquet_path(download_dir: Path, prefix: str, folder: str, day: date) -> Pa
         / f"month={day.month:02d}"
         / f"{day.isoformat()}.parquet"
     )
-
-
-def _flat_file_key(prefix: str, folder: str, day: date) -> str:
-    """S3 object key for one day, e.g. ``us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz``."""
-    return f"{prefix}/{folder}/{day:%Y/%m}/{day.isoformat()}.csv.gz"
-
-
-def _date_range(start: date, end: date) -> list[date]:
-    """Inclusive list of calendar days from ``start`` to ``end``."""
-    if end < start:
-        raise ValueError(f"end date {end} precedes start date {start}")
-    return [start + timedelta(days=i) for i in range((end - start).days + 1)]

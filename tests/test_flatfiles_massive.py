@@ -82,13 +82,6 @@ def _make(tmp_path: Path, store: dict[str, bytes]) -> MassiveFlatFiles:
 # --- object-key / cache-path resolution ---------------------------------------
 
 
-def test_flat_file_key():
-    key = flatfiles_massive._flat_file_key(
-        "us_stocks_sip", "trades_v1", date(2024, 1, 2)
-    )
-    assert key == "us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz"
-
-
 def test_parquet_path_is_hive_partitioned():
     path = flatfiles_massive._parquet_path(
         Path("/cache"), "us_stocks_sip", "trades_v1", date(2024, 1, 2)
@@ -96,16 +89,6 @@ def test_parquet_path_is_hive_partitioned():
     assert path == Path(
         "/cache/us_stocks_sip/trades_v1/year=2024/month=01/2024-01-02.parquet"
     )
-
-
-def test_date_range_inclusive_and_crosses_month():
-    days = flatfiles_massive._date_range(date(2024, 1, 31), date(2024, 2, 1))
-    assert days == [date(2024, 1, 31), date(2024, 2, 1)]
-
-
-def test_date_range_rejects_reversed_range():
-    with pytest.raises(ValueError):
-        flatfiles_massive._date_range(date(2024, 1, 4), date(2024, 1, 2))
 
 
 # --- high-level pipeline -----------------------------------------------------
