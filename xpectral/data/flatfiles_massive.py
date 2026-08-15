@@ -236,20 +236,17 @@ class MassiveFlatFiles:
         if self._offline:
             return
 
-        pending = [
-            day
+        # Key format, e.g. ``us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz``.
+        key_to_day = {
+            f"{prefix}/{folder}/{day:%Y/%m}/{day.isoformat()}.csv.gz": day
             for day in days
             if overwrite
             or not _parquet_path(self._download_dir, prefix, folder, day).exists()
-        ]
-        if not pending:
+        }
+        if not key_to_day:
             return
 
-        # e.g. ``us_stocks_sip/trades_v1/2024/01/2024-01-02.csv.gz``.
-        keys = [
-            f"{prefix}/{folder}/{day:%Y/%m}/{day.isoformat()}.csv.gz" for day in pending
-        ]
-        key_to_day = dict(zip(keys, pending))
+        keys = list(key_to_day)
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_dir = Path(tmp)
