@@ -54,9 +54,9 @@ class QuantAccessor:
         expr = (1 + self._expr).cum_prod().sub(1)
 
         return (
-            expr.over(over).alias(f"compounded")
+            expr.over(over).alias("compounded")
             if over is not None
-            else expr.alias(f"compounded")
+            else expr.alias("compounded")
         )
 
     def rolling_vol(

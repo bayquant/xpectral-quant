@@ -4,7 +4,6 @@
 
 # Standard library imports
 from typing import Optional
-from typing import Union
 
 # Other imports
 import numpy as np
