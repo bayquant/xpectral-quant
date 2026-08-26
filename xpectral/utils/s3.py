@@ -19,7 +19,7 @@ from botocore.exceptions import ClientError
 
 __all__ = ["S3Downloader"]
 
-_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # General API
@@ -120,15 +120,15 @@ class S3Downloader:
                 # instead of a raised auth error.
                 code = error.response.get("Error", {}).get("Code")
                 if code in {"404", "NoSuchKey", "403", "AccessDenied"}:
-                    _logger.warning("no object for key, skipping: %s", key)
+                    logger.warning("no object for key, skipping: %s", key)
                     continue
                 raise
             except BotoCoreError:
                 # Unlike a missing object, this means the request never
                 # reached S3 at all (DNS/connection/timeout) -- surface it
                 # loudly rather than treating it as "no data available".
-                _logger.error("connection failure downloading key: %s", key)
+                logger.error("connection failure downloading key: %s", key)
                 raise
-            _logger.info("downloaded: %s", key)
+            logger.info("downloaded: %s", key)
             paths.append(path)
         return paths

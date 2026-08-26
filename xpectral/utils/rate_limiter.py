@@ -12,7 +12,7 @@ from typing import Deque
 # Globals and constants
 # -----------------------------------------------------------------------------
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # General API
@@ -39,7 +39,7 @@ class RateLimiter:
         if len(self._hits) >= self.calls:
             sleep_for = self.per_seconds - (now - self._hits[0])
             if sleep_for > 0:
-                log.info("sleeping for %.0f seconds", sleep_for)
+                logger.info("sleeping for %.0f seconds", sleep_for)
                 time.sleep(sleep_for)
             self.acquire()
             return
