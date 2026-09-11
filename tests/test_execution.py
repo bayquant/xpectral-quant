@@ -11,6 +11,8 @@ from xpectral.quant.execution import decay_parameter
 from xpectral.quant.execution import efficient_frontier
 from xpectral.quant.execution import expected_cost
 from xpectral.quant.execution import optimal_holdings
+from xpectral.quant.execution import permanent_impact_cost
+from xpectral.quant.execution import temporary_impact_cost
 
 # -----------------------------------------------------------------------------
 # Globals and constants
@@ -64,6 +66,28 @@ def test_efficient_frontier_trades_off_cost_and_risk():
 
     assert np.all(np.diff(frontier["expected_cost"]) >= 0)
     assert np.all(np.diff(frontier["variance"]) <= 0)
+
+
+def test_permanent_impact_cost_matches_closed_form():
+    np.testing.assert_allclose(
+        permanent_impact_cost(_X, _GAMMA), 0.5 * _GAMMA * _X**2
+    )
+
+
+def test_expected_cost_is_sum_of_permanent_and_temporary_components():
+    kappa = decay_parameter(0.5, _SIGMA, _ETA)
+
+    np.testing.assert_allclose(
+        expected_cost(_X, _GAMMA, _ETA, _T, kappa),
+        permanent_impact_cost(_X, _GAMMA)
+        + temporary_impact_cost(_X, _ETA, _T, kappa),
+    )
+
+
+def test_temporary_impact_cost_matches_risk_neutral_limit_at_kappa_zero():
+    np.testing.assert_allclose(
+        temporary_impact_cost(_X, _ETA, _T, 0.0), _ETA * _X**2 / _T
+    )
 
 
 def test_frontier_point_matches_direct_cost_and_variance_calls():

@@ -12,6 +12,8 @@ import numpy as np
 __all__ = [
     "decay_parameter",
     "optimal_holdings",
+    "permanent_impact_cost",
+    "temporary_impact_cost",
     "expected_cost",
     "cost_variance",
     "efficient_frontier",
@@ -86,13 +88,74 @@ def optimal_holdings(
     return float(x) if is_scalar else x
 
 
+def permanent_impact_cost(X: float, gamma: float) -> float:
+    """
+    Permanent-impact component of expected liquidation cost: (1/2) * gamma * X^2.
+
+    Schedule-independent, so it is the same for any trajectory that
+    liquidates X shares.
+
+    Parameters
+    ----------
+    X : float
+        Initial shares held.
+    gamma : float
+        Permanent impact coefficient.
+
+    Returns
+    -------
+    float
+        Permanent-impact cost in dollars.
+    """
+    return 0.5 * gamma * X**2
+
+
+def temporary_impact_cost(X: float, eta: float, T: float, kappa: float) -> float:
+    """
+    Temporary-impact component of expected liquidation cost under the
+    optimal trajectory for a given kappa.
+
+    Continuous-time form: eta * integral(x'(t)^2, 0, T), evaluated in
+    closed form from the optimal x(t), falling back to the risk-neutral
+    limit X^2 / T as kappa * T -> 0 (i.e. lambda == 0), where the
+    closed-form expression would otherwise be 0/0.
+
+    Parameters
+    ----------
+    X : float
+        Initial shares held.
+    eta : float
+        Temporary impact coefficient.
+    T : float
+        Liquidation horizon.
+    kappa : float
+        Decay parameter for the trajectory being costed, from
+        `decay_parameter`.
+
+    Returns
+    -------
+    float
+        Temporary-impact cost in dollars.
+    """
+    if abs(kappa * T) < _KAPPA_T_TOL:
+        trading_integral = X**2 / T
+    else:
+        trading_integral = (
+            X**2
+            * kappa
+            / np.sinh(kappa * T) ** 2
+            * (kappa * T / 2 + np.sinh(2 * kappa * T) / 4)
+        )
+
+    return eta * trading_integral
+
+
 def expected_cost(X: float, gamma: float, eta: float, T: float, kappa: float) -> float:
     """
     Expected liquidation cost under the optimal trajectory for a given kappa.
 
-    Continuous-time form: (1/2) * gamma * X^2 + eta * integral(x'(t)^2, 0, T),
-    with the second term evaluated in closed form from the optimal x(t)
-    (the permanent-impact term is schedule-independent, so it is added as-is).
+    Sum of the permanent-impact cost (`permanent_impact_cost`) and the
+    temporary-impact cost (`temporary_impact_cost`).
 
     Parameters
     ----------
@@ -113,17 +176,7 @@ def expected_cost(X: float, gamma: float, eta: float, T: float, kappa: float) ->
     float
         Expected cost in dollars.
     """
-    if abs(kappa * T) < _KAPPA_T_TOL:
-        trading_integral = X**2 / T
-    else:
-        trading_integral = (
-            X**2
-            * kappa
-            / np.sinh(kappa * T) ** 2
-            * (kappa * T / 2 + np.sinh(2 * kappa * T) / 4)
-        )
-
-    return 0.5 * gamma * X**2 + eta * trading_integral
+    return permanent_impact_cost(X, gamma) + temporary_impact_cost(X, eta, T, kappa)
 
 
 def cost_variance(X: float, sigma: float, T: float, kappa: float) -> float:

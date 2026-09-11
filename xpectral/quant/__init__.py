@@ -8,6 +8,8 @@ from .execution import decay_parameter
 from .execution import efficient_frontier
 from .execution import expected_cost
 from .execution import optimal_holdings
+from .execution import permanent_impact_cost
+from .execution import temporary_impact_cost
 from .polars_accessors import QuantAccessor
 from .portfolio import Portfolio
 
@@ -23,4 +25,6 @@ __all__ = [
     "efficient_frontier",
     "expected_cost",
     "optimal_holdings",
+    "permanent_impact_cost",
+    "temporary_impact_cost",
 ]
