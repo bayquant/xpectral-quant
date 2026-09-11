@@ -11,9 +11,9 @@ can be used together.
 
 ## Modules
 
-- **`xpectral.quant`** — Financial metrics (returns, volatility, beta) via
+- **`xpectral.quant`**: Financial metrics (returns, volatility, beta) via
   `pl.col(...).quant.returns()`, plus a `Portfolio` builder.
-- **`xpectral.data`** — Market data from the Polygon/Massive API with caching
+- **`xpectral.data`**: Market data from the Polygon/Massive API with caching
   and rate limiting, plus simulations (`BrownianMotion`).
 
 ## Usage

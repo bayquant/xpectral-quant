@@ -225,7 +225,7 @@ def efficient_frontier(
 
     For each lambda, the corresponding optimal trajectory is derived (via
     `decay_parameter`) and its expected cost and cost variance are computed
-    in closed form — no numerical optimizer is involved.
+    in closed form: no numerical optimizer is involved.
 
     Parameters
     ----------
