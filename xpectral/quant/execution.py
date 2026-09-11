@@ -1,3 +1,10 @@
+"""
+Almgren-Chriss optimal execution: trajectory, expected cost, and variance.
+
+Reference: Almgren, R., & Chriss, N. (2000). Optimal execution of portfolio
+transactions. Journal of Risk, 3, 39-60.
+"""
+
 # -----------------------------------------------------------------------------
 # Imports
 # -----------------------------------------------------------------------------
@@ -31,7 +38,7 @@ _KAPPA_T_TOL = 1e-8
 
 def decay_parameter(lam: float, sigma: float, eta: float) -> float:
     """
-    Almgren-Chriss decay parameter kappa = sqrt(lambda * sigma^2 / eta).
+    Decay parameter kappa = sqrt(lambda * sigma^2 / eta).
 
     Parameters
     ----------
@@ -54,7 +61,7 @@ def optimal_holdings(
     t: float | np.ndarray, X: float, T: float, kappa: float
 ) -> float | np.ndarray:
     """
-    Optimal shares-held trajectory x(t) for the Almgren-Chriss schedule.
+    Optimal shares-held trajectory x(t) for the liquidation schedule.
 
     x(t) = X * sinh(kappa(T - t)) / sinh(kappa*T), falling back to the
     closed-form risk-neutral limit x(t) = X * (1 - t/T) as kappa -> 0
@@ -114,11 +121,6 @@ def temporary_impact_cost(X: float, eta: float, T: float, kappa: float) -> float
     """
     Temporary-impact component of expected liquidation cost under the
     optimal trajectory for a given kappa.
-
-    Continuous-time form: eta * integral(x'(t)^2, 0, T), evaluated in
-    closed form from the optimal x(t), falling back to the risk-neutral
-    limit X^2 / T as kappa * T -> 0 (i.e. lambda == 0), where the
-    closed-form expression would otherwise be 0/0.
 
     Parameters
     ----------
