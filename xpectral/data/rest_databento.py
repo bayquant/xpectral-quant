@@ -3,6 +3,7 @@
 # -----------------------------------------------------------------------------
 
 # Standard library imports
+import os
 from datetime import date
 from datetime import datetime
 
@@ -36,7 +37,7 @@ class DatabentoREST:
     """
 
     def __init__(self, api_key: str | None = None):
-        self._client = db.Historical(key=api_key)
+        self._client = db.Historical(key=api_key or os.getenv("DATABENTO_API_KEY"))
 
     def get_option_quotes(
         self,
