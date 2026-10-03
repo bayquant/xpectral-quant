@@ -9,8 +9,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Local imports
+from . import rest_databento
 from . import simulations
 from . import xml_treasury
+from .rest_databento import DatabentoREST
 from .simulations import BrownianMotion
 from .xml_treasury import USTreasuryRates
 
@@ -33,10 +35,12 @@ from .rest_massive import MassiveREST  # noqa: E402
 
 __all__ = [
     "BrownianMotion",
+    "DatabentoREST",
     "MassiveFlatFiles",
     "MassiveREST",
     "USTreasuryRates",
     "flatfiles_massive",
+    "rest_databento",
     "rest_massive",
     "simulations",
     "xml_treasury",
