@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 
 # First-party imports
-from xpectral.quant.execution import cost_variance
-from xpectral.quant.execution import decay_parameter
-from xpectral.quant.execution import efficient_frontier
-from xpectral.quant.execution import expected_cost
-from xpectral.quant.execution import optimal_holdings
-from xpectral.quant.execution import permanent_impact_cost
-from xpectral.quant.execution import temporary_impact_cost
+from xpectral_quant.quant.execution import cost_variance
+from xpectral_quant.quant.execution import decay_parameter
+from xpectral_quant.quant.execution import efficient_frontier
+from xpectral_quant.quant.execution import expected_cost
+from xpectral_quant.quant.execution import optimal_holdings
+from xpectral_quant.quant.execution import permanent_impact_cost
+from xpectral_quant.quant.execution import temporary_impact_cost
 
 # -----------------------------------------------------------------------------
 # Globals and constants

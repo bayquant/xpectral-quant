@@ -14,8 +14,8 @@ import pytest
 from botocore.exceptions import ClientError
 
 # First-party imports
-from xpectral.data import flatfiles_massive
-from xpectral.data.flatfiles_massive import MassiveFlatFiles
+from xpectral_quant.data import flatfiles_massive
+from xpectral_quant.data.flatfiles_massive import MassiveFlatFiles
 
 # -----------------------------------------------------------------------------
 # Globals and constants

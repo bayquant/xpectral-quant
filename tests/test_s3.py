@@ -11,7 +11,7 @@ from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError
 
 # First-party imports
-from xpectral.utils.s3 import S3Downloader
+from xpectral_quant.utils.s3 import S3Downloader
 
 # -----------------------------------------------------------------------------
 # Globals and constants

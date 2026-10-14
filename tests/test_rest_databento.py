@@ -9,7 +9,7 @@ from datetime import date
 import pandas as pd
 
 # First-party imports
-from xpectral.data.rest_databento import DatabentoREST
+from xpectral_quant.data.rest_databento import DatabentoREST
 
 # -----------------------------------------------------------------------------
 # Globals and constants

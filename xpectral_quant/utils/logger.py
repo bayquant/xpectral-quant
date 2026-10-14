@@ -14,8 +14,8 @@ from typing import Literal
 __all__ = ["LogLevel", "setup_logging"]
 
 # Package-root logger. Modules log via ``logging.getLogger(__name__)``, which
-# descends from this as ``xpectral.*``.
-_ROOT = "xpectral"
+# descends from this as ``xpectral_quant.*``.
+_ROOT = "xpectral_quant"
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
@@ -42,7 +42,7 @@ logging.getLogger(_ROOT).addHandler(logging.NullHandler())
 def setup_logging(
     level: LogLevel = "INFO", *, color: bool = True, force_color: bool = False
 ) -> None:
-    """Turn on console logging for xpectral (opt-in, to stderr).
+    """Turn on console logging for xpectral_quant (opt-in, to stderr).
 
     Apps that manage their own logging can ignore this and configure the
     standard ``logging`` module directly. Color is applied only on a TTY, so

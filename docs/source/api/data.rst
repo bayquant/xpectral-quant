@@ -1,4 +1,4 @@
-xpectral.data
+xpectral_quant.data
 =============
 
 Market data access via the Polygon/Massive API with caching and rate limiting.
@@ -6,7 +6,7 @@ Market data access via the Polygon/Massive API with caching and rate limiting.
 MassiveREST
 -----------
 
-.. automodule:: xpectral.data.rest_massive
+.. automodule:: xpectral_quant.data.rest_massive
    :members:
    :undoc-members:
    :show-inheritance:
@@ -14,7 +14,7 @@ MassiveREST
 Simulations
 -----------
 
-.. autoclass:: xpectral.data.simulations.BrownianMotion
+.. autoclass:: xpectral_quant.data.simulations.BrownianMotion
    :members:
    :undoc-members:
    :show-inheritance:

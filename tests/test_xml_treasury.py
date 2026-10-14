@@ -6,8 +6,8 @@
 from datetime import date
 
 # First-party imports
-from xpectral.data import xml_treasury
-from xpectral.data.xml_treasury import USTreasuryRates
+from xpectral_quant.data import xml_treasury
+from xpectral_quant.data.xml_treasury import USTreasuryRates
 
 # -----------------------------------------------------------------------------
 # Globals and constants

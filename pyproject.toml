@@ -1,6 +1,6 @@
 [project]
 name = "xpectral-quant"
-version = "1.0.1"
+version = "2.0.0"
 description = "Quant analytics and market data for Polars DataFrames"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -47,10 +47,10 @@ dev = [
     "matplotlib>=3.11.1",
 ]
 
-# `xpectral` is a PEP 420 namespace package shared with xpectral-chart, so it
-# has no top-level __init__.py. Ship only the quant half of the namespace.
+# A regular package with a unique import name (`xpectral_quant`), so it cannot
+# collide with sibling projects installed in the same environment.
 [tool.hatch.build.targets.wheel]
-only-include = ["xpectral/quant", "xpectral/data", "xpectral/utils", "xpectral/py.typed"]
+packages = ["xpectral_quant"]
 
 [tool.ruff]
 line-length = 88
@@ -63,8 +63,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["xpectral"]
+known-first-party = ["xpectral_quant"]
 force-single-line = true
 
 [tool.ruff.lint.per-file-ignores]
-"xpectral/data/__init__.py" = ["E402"]
+"xpectral_quant/data/__init__.py" = ["E402"]

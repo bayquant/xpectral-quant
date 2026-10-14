@@ -102,14 +102,14 @@ class MassiveFlatFiles:
 
     Resolves the per-day object keys for a dataset and date range, downloads
     any gzipped CSVs not already cached (via a generic
-    :class:`~xpectral.utils.s3.S3Downloader` into a scratch temp directory),
+    :class:`~xpectral_quant.utils.s3.S3Downloader` into a scratch temp directory),
     and writes each day's raw rows to a local Hive-partitioned parquet cache
     (``download_dir/prefix/folder/year=YYYY/month=MM/YYYY-MM-DD.parquet``) --
     the temp CSV is discarded once its parquet file is written, so only
     parquet is kept on disk. Reads scan that cache and convert every
     recognized epoch-ns timestamp column to a tz-aware datetime, returning a
     semi-wide ``pl.LazyFrame`` with ``ticker`` first -- mirroring
-    :class:`~xpectral.data.rest_massive.MassiveREST`.
+    :class:`~xpectral_quant.data.rest_massive.MassiveREST`.
 
     The flat-files S3 credentials are issued in the Massive Dashboard and are
     separate from ``MASSIVE_API_KEY``.
