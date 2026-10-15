@@ -13,9 +13,7 @@ import polars as pl
 from massive import RESTClient
 from massive.rest.models import Order
 from massive.rest.models import Sort
-
-# Local imports
-from ..utils.rate_limiter import RateLimiter
+from xpectral_utils.rate_limiter import RateLimiter
 
 # -----------------------------------------------------------------------------
 # Globals and constants
