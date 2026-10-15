@@ -11,9 +11,7 @@ from pathlib import Path
 
 # Third-party imports
 import polars as pl
-
-# Local imports
-from ..utils.s3 import S3Downloader
+from xpectral_utils.s3 import S3Downloader
 
 # -----------------------------------------------------------------------------
 # Globals and constants
@@ -102,7 +100,7 @@ class MassiveFlatFiles:
 
     Resolves the per-day object keys for a dataset and date range, downloads
     any gzipped CSVs not already cached (via a generic
-    :class:`~xpectral_quant.utils.s3.S3Downloader` into a scratch temp directory),
+    :class:`~xpectral_utils.s3.S3Downloader` into a scratch temp directory),
     and writes each day's raw rows to a local Hive-partitioned parquet cache
     (``download_dir/prefix/folder/year=YYYY/month=MM/YYYY-MM-DD.parquet``) --
     the temp CSV is discarded once its parquet file is written, so only
